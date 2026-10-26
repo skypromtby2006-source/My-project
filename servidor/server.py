@@ -95,11 +95,16 @@ class Sala:
 
 
 # ----------------------------------------------------------------- misión
-# Coordenadas alineadas con la escena de GestorPartida.cs: la mesa está en el
-# centro con la tapa en y=1 y los jugadores aparecen en z=-5. El reactor va en
-# el suelo, al otro lado de la mesa, para que haya que caminar con cada esfera.
+# Única fuente de verdad del escenario: el cliente no tiene posiciones propias y
+# dibuja la mesa, las esferas y el reactor con lo que llega en inicio.mision.
+# Los jugadores aparecen en z=-5 (GestorPartida.cs); el reactor va en el suelo,
+# al otro lado de la mesa, para que haya que caminar con cada esfera.
 ELEMENTOS = ["H", "H", "O", "Na", "Cl", "C"]
-POSICIONES_MESA = [(-1.25 + i * 0.5, 1.15, 0.0) for i in range(6)]
+MESA = {"x": 0.0, "y": 0.5, "z": 0.0, "ancho": 3.0, "alto": 1.0, "largo": 1.5}  # centro y tamaño
+RADIO_OBJETO = 0.15
+# Las 6 esferas en fila sobre la tapa de la mesa, separadas 0.5 m
+POSICIONES_MESA = [(MESA["x"] - 1.25 + i * 0.5, MESA["y"] + MESA["alto"] / 2 + RADIO_OBJETO, MESA["z"])
+                   for i in range(len(ELEMENTOS))]
 REACTOR = {"x": 0.0, "y": 0.0, "z": 4.0, "radio": 1.0}
 RECETA = {"H": 2, "O": 1}
 FORMULA = "2 H + 1 O → H₂O"
@@ -152,6 +157,8 @@ class Mision:
         return {
             "objetos": [o.info() for o in self.objetos.values()],
             "reactor": REACTOR,
+            "mesa": MESA,
+            "radio_objeto": RADIO_OBJETO,
             "receta": [{"elemento": e, "cantidad": n} for e, n in RECETA.items()],
             "formula": FORMULA,
             "estado": self.estado(),

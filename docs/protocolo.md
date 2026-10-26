@@ -88,12 +88,15 @@ El campo `t` indica el tipo de mensaje.
     "... 6 en total: H, H, O, Na, Cl y C"
   ],
   "reactor": {"x": 0.0, "y": 0.0, "z": 4.0, "radio": 1.0},
+  "mesa": {"x": 0.0, "y": 0.5, "z": 0.0, "ancho": 3.0, "alto": 1.0, "largo": 1.5},
+  "radio_objeto": 0.15,
   "receta": [{"elemento": "H", "cantidad": 2}, {"elemento": "O", "cantidad": 1}],
   "formula": "2 H + 1 O → H₂O",
   "estado": {"reactor": [], "errores": 0, "completada": false, "mensaje": ""}
 }
 ```
 
+- **El escenario sale de aquí:** el cliente no tiene posiciones propias de la mesa, las esferas ni el reactor; los dibuja con estos datos. `mesa` es el centro y el tamaño de la caja (x = ancho, y = alto, z = largo); `reactor` es el centro de un disco en el suelo. Así la única fuente de verdad es `server.py`.
 - *Objeto*: `portador` es el `id` del jugador que lo lleva, o `""` si nadie (cadena vacía y no `null`, para que `JsonUtility` lo lea sin sorpresas).
 - `receta` es una lista y no un diccionario porque `JsonUtility` de Unity no lee diccionarios.
 - Los objetos van en 6 posiciones fijas sobre la mesa, pero **los elementos se barajan** en cada misión: si no, el player los memorizaría y ya no necesitaría al wizard.

@@ -67,6 +67,7 @@ async def main():
     await ana.env(t="iniciar")
     mision = (await ana.rec("inicio"))["mision"]; await beto.rec("inicio")
     assert len(mision["objetos"]) == 6 and mision["estado"]["reactor"] == []
+    assert mision["mesa"]["ancho"] > 0 and mision["radio_objeto"] > 0
     por_elem = {}
     for o in mision["objetos"]:
         por_elem.setdefault(o["elemento"], []).append(o)

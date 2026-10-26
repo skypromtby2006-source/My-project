@@ -94,9 +94,9 @@ El servidor es **la única fuente de verdad** sobre los objetos. **Por qué:** s
 - [x] Commit, push de la rama y reporte S1-1.
 
 ### Fase S1-2 — Cliente Unity · 🤖 CLAUDE CODE
-- [ ] Implementar 2.3. Compilar en batch: cero `error CS`.
-- [ ] Re-ejecutar `ConfigurarDemo.Configurar` si la escena necesita cambios. No editar el `.unity` a mano.
-- [ ] Build de Linux, commit y reporte S1-2.
+- [x] Implementar 2.3. Compilar en batch: cero `error CS`.
+- [x] Re-ejecutar `ConfigurarDemo.Configurar` si la escena necesita cambios. No editar el `.unity` a mano.
+- [x] Build de Linux, commit y reporte S1-2.
 
 ### Fase S1-3 — Prueba de juego · 🧑 JONA
 - [ ] Editor (Play) = Wizard y build de Linux = Player. Recorrer la misión completa: error con Na, señalamiento, completar y reiniciar.

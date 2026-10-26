@@ -8,7 +8,7 @@ using System.Threading;
 using UnityEngine;
 
 // ---------- Modelos que llegan del servidor (JsonUtility ignora los campos que no vienen) ----------
-[Serializable] public class InfoJugador { public string id; public string nombre; public bool listo; }
+[Serializable] public class InfoJugador { public string id; public string nombre; public bool listo; public string rol; }
 
 [Serializable] public class InfoSala
 {
@@ -17,14 +17,55 @@ using UnityEngine;
     public List<InfoJugador> jugadores = new List<InfoJugador>();
 }
 
+// Misión: los nombres de campo son idénticos a los de server.py (Mision.info)
+[Serializable] public class InfoObjeto
+{
+    public string id, elemento, portador;   // portador: id del jugador que lo lleva, "" = nadie
+    public float x, y, z;
+}
+
+[Serializable] public class InfoReactor { public float x, y, z, radio; }
+[Serializable] public class InfoMesa { public float x, y, z, ancho, alto, largo; }
+[Serializable] public class ItemReceta { public string elemento; public int cantidad; }
+
+[Serializable] public class EstadoMision
+{
+    public List<string> reactor = new List<string>();   // símbolos ya aceptados
+    public int errores;
+    public bool completada;
+    public string mensaje;
+}
+
+[Serializable] public class InfoMision
+{
+    public List<InfoObjeto> objetos = new List<InfoObjeto>();
+    public InfoReactor reactor;
+    public InfoMesa mesa;
+    public float radio_objeto;
+    public List<ItemReceta> receta = new List<ItemReceta>();
+    public string formula;
+    public EstadoMision estado;
+}
+
 [Serializable] public class Mensaje
 {
     public string t;            // tipo de mensaje
     public string id, nombre, msg;
     public InfoSala sala;
     public List<InfoSala> lista;
+    public InfoMision mision;
     public float x, y, z, ry;
+
+    // "obj" llega como objeto en el mensaje "obj" y como texto en "senal". JsonUtility
+    // no admite un campo con dos tipos, así que esos mensajes se leen aparte (ver Update)
+    // y el resultado se guarda aquí, fuera de la serialización.
+    [NonSerialized] public InfoObjeto objeto;      // mensaje "obj"
+    [NonSerialized] public string objId, por;      // mensaje "senal"
+    [NonSerialized] public EstadoMision estado;    // mensaje "estado"
 }
+
+[Serializable] class MsgObj { public InfoObjeto obj; }
+[Serializable] class MsgSenal { public string obj; public string por; }
 
 // ---------- Cliente TCP: un hilo lee del socket, Unity procesa en Update ----------
 public class ClienteRed : MonoBehaviour
@@ -34,6 +75,12 @@ public class ClienteRed : MonoBehaviour
     public bool Conectado => cliente != null && cliente.Connected;
     public string MiId { get; private set; }
     public InfoSala SalaActual { get; private set; }
+    public InfoMision MisionActual { get; private set; }
+    public EstadoMision EstadoActual => MisionActual?.estado;
+
+    // El rol no se guarda: se lee de la sala cada vez, así refleja el cambio de anfitrión
+    public string MiRol => SalaActual?.jugadores.Find(j => j.id == MiId)?.rol ?? "player";
+    public bool SoyWizard => MiRol == "wizard";
 
     public event Action<Mensaje> AlRecibir;   // cualquier mensaje
     public event Action<string> AlError;      // errores legibles
@@ -101,6 +148,17 @@ public class ClienteRed : MonoBehaviour
         Enviar(string.Format(ci, "{{\"t\":\"pos\",\"x\":{0:F3},\"y\":{1:F3},\"z\":{2:F3},\"ry\":{3:F1}}}", p.x, p.y, p.z, rotY));
     }
 
+    // ---------- Acciones de la misión (el servidor valida el rol) ----------
+    public void Agarrar(string obj) => Enviar($"{{\"t\":\"agarrar\",\"obj\":{Json(obj)}}}");
+    public void Senalar(string obj) => Enviar($"{{\"t\":\"senalar\",\"obj\":{Json(obj)}}}");
+    public void Reiniciar() => Enviar("{\"t\":\"reiniciar\"}");
+
+    public void Soltar(string obj, Vector3 p)
+    {
+        var ci = System.Globalization.CultureInfo.InvariantCulture; // evita "1,5" en PCs en español
+        Enviar(string.Format(ci, "{{\"t\":\"soltar\",\"obj\":{0},\"x\":{1:F3},\"y\":{2:F3},\"z\":{3:F3}}}", Json(obj), p.x, p.y, p.z));
+    }
+
     void Enviar(string json)
     {
         if (!Conectado) return;
@@ -118,9 +176,26 @@ public class ClienteRed : MonoBehaviour
             switch (m.t)
             {
                 case "bienvenido": MiId = m.id; break;
-                case "sala":
-                case "inicio": SalaActual = m.sala; break;
-                case "fuera": SalaActual = null; break;
+                case "sala": SalaActual = m.sala; break;
+                case "inicio": SalaActual = m.sala; MisionActual = m.mision; break;
+                case "fuera": SalaActual = null; MisionActual = null; break;
+                case "obj":
+                    m.objeto = JsonUtility.FromJson<MsgObj>(linea).obj;
+                    if (MisionActual != null)
+                    {
+                        int i = MisionActual.objetos.FindIndex(o => o.id == m.objeto.id);
+                        if (i >= 0) MisionActual.objetos[i] = m.objeto;
+                    }
+                    break;
+                case "senal":
+                    var s = JsonUtility.FromJson<MsgSenal>(linea);
+                    m.objId = s.obj; m.por = s.por;
+                    break;
+                case "estado":
+                    // Los campos de "estado" están en la raíz del mensaje y coinciden con EstadoMision
+                    m.estado = JsonUtility.FromJson<EstadoMision>(linea);
+                    if (MisionActual != null) MisionActual.estado = m.estado;
+                    break;
                 case "error": AlError?.Invoke(m.msg); break;
             }
             AlRecibir?.Invoke(m);
@@ -138,6 +213,7 @@ public class ClienteRed : MonoBehaviour
         try { cliente?.Close(); } catch { }
         cliente = null;
         SalaActual = null;
+        MisionActual = null;
         MiId = null;
     }
 
