@@ -126,18 +126,18 @@ My-project/
 - [x] 1.7 Commit, push y reporte de la Fase 1. **No borres `_base/` todavía.**
 
 ### Fase 2 — Proyecto Unity · 🧑 JONA, luego 🤖 CLAUDE CODE
-- [ ] 2.1 🧑 Unity Hub → *New project* → **Universal 3D** → nombre **`QuimicaVR`**, ubicación `~/Proyectos/My-project/`. Esperar a que abra, cerrar el editor y avisar a Claude Code.
+- [x] 2.1 🧑 Unity Hub → *New project* → **Universal 3D** → nombre **`QuimicaVR`**, ubicación `~/Proyectos/My-project/`. Esperar a que abra, cerrar el editor y avisar a Claude Code.
   **Por qué URP:** es el pipeline que se usará luego para VR, así no hay que migrar después.
-- [ ] 2.2 🤖 Copiar `_base/unity/Scripts/*` → `QuimicaVR/Assets/Scripts/Red/` y `_base/unity/Editor/*` → `QuimicaVR/Assets/Editor/`.
-- [ ] 2.3 🤖 Compilar en batch (sin `-executeMethod`). **Criterio:** cero `error CS` en el log. Si hay errores, corregirlos respetando la regla 5.
-- [ ] 2.4 🤖 Ejecutar en batch `-executeMethod Quimica.EditorTools.ConfigurarDemo.Configurar`. **Criterio:** existe `Assets/Scenes/Demo.unity` y el log muestra `[Quimica] Escena demo configurada`.
-- [ ] 2.5 🤖 Commit (incluyendo los `.meta`, `Packages/` y `ProjectSettings/`) y push.
-- [ ] 2.6 🧑 Abrir el proyecto en el editor, abrir `Assets/Scenes/Demo.unity` y darle **Play** con el servidor arriba: conectar a `127.0.0.1` y crear una sala. Confirmar a Claude Code que se ve el código de sala, o pasarle el error de la consola.
-- [ ] 2.7 🤖 Reporte de la Fase 2.
+- [x] 2.2 🤖 Copiar `_base/unity/Scripts/*` → `QuimicaVR/Assets/Scripts/Red/` y `_base/unity/Editor/*` → `QuimicaVR/Assets/Editor/`.
+- [x] 2.3 🤖 Compilar en batch (sin `-executeMethod`). **Criterio:** cero `error CS` en el log. Si hay errores, corregirlos respetando la regla 5.
+- [x] 2.4 🤖 Ejecutar en batch `-executeMethod Quimica.EditorTools.ConfigurarDemo.Configurar`. **Criterio:** existe `Assets/Scenes/Demo.unity` y el log muestra `[Quimica] Escena demo configurada`.
+- [x] 2.5 🤖 Commit (incluyendo los `.meta`, `Packages/` y `ProjectSettings/`) y push.
+- [x] 2.6 🧑 Abrir el proyecto en el editor, abrir `Assets/Scenes/Demo.unity` y darle **Play** con el servidor arriba: conectar a `127.0.0.1` y crear una sala. Confirmar a Claude Code que se ve el código de sala, o pasarle el error de la consola.
+- [x] 2.7 🤖 Reporte de la Fase 2.
 
 ### Fase 3 — Builds y prueba en Linux · 🤖 CLAUDE CODE, luego 🧑 JONA
-- [ ] 3.1 🤖 Pedir a Jona que cierre el editor. Luego, en batch, ejecutar `Quimica.EditorTools.Construir.Linux` y después `Quimica.EditorTools.Construir.Windows`. **Criterio:** existen `Build/Linux/QuimicaDemo.x86_64` y `Build/Windows/QuimicaDemo.exe`, y el log muestra `Succeeded`.
-- [ ] 3.2 🤖 Crear `scripts/jugar_linux.sh N`, que abre N instancias del build de Linux.
+- [x] 3.1 🤖 Pedir a Jona que cierre el editor. Luego, en batch, ejecutar `Quimica.EditorTools.Construir.Linux` y después `Quimica.EditorTools.Construir.Windows`. **Criterio:** existen `Build/Linux/QuimicaDemo.x86_64` y `Build/Windows/QuimicaDemo.exe`, y el log muestra `Succeeded`.
+- [x] 3.2 🤖 Crear `scripts/jugar_linux.sh N`, que abre N instancias del build de Linux.
 - [ ] 3.3 🧑 Prueba multijugador en Arch: servidor arriba, `jugar_linux.sh 2`, A crea sala, B se une y marca Listo, A inicia y los dos se mueven con WASD. Además: cerrar A y verificar que B pasa a ser anfitrión.
 - [ ] 3.4 🤖 Corregir lo que Jona reporte, re-build, commit y reporte de la Fase 3.
 
