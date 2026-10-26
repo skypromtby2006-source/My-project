@@ -41,14 +41,14 @@ public class GestorPartida : MonoBehaviour
         var suelo = GameObject.CreatePrimitive(PrimitiveType.Plane);
         suelo.transform.SetParent(escena.transform);
         suelo.transform.localScale = new Vector3(3, 1, 3);
-        suelo.GetComponent<Renderer>().material.color = new Color(.25f, .28f, .35f);
+        Pintar(suelo, new Color(.25f, .28f, .35f));
 
         // "Mesa de laboratorio" decorativa en el centro
         var mesa = GameObject.CreatePrimitive(PrimitiveType.Cube);
         mesa.transform.SetParent(escena.transform);
         mesa.transform.position = new Vector3(0, .5f, 0);
         mesa.transform.localScale = new Vector3(3, 1, 1.5f);
-        mesa.GetComponent<Renderer>().material.color = new Color(.9f, .9f, .95f);
+        Pintar(mesa, new Color(.9f, .9f, .95f));
 
         for (int i = 0; i < sala.jugadores.Count; i++)
         {
@@ -66,13 +66,14 @@ public class GestorPartida : MonoBehaviour
         go.name = nombre;
         go.transform.SetParent(escena.transform);
         go.transform.position = pos;
-        go.GetComponent<Renderer>().material.color = color;
+        Pintar(go, color);
 
         // "nariz" para ver hacia dónde mira
         var nariz = GameObject.CreatePrimitive(PrimitiveType.Cube);
         nariz.transform.SetParent(go.transform, false);
         nariz.transform.localPosition = new Vector3(0, .4f, .5f);
         nariz.transform.localScale = Vector3.one * .25f;
+        Pintar(nariz, Color.Lerp(color, Color.black, .5f));
 
         // nombre flotante
         var etiqueta = new GameObject("Nombre").AddComponent<TextMesh>();
@@ -89,6 +90,22 @@ public class GestorPartida : MonoBehaviour
             etiqueta.GetComponent<MeshRenderer>().material = fuente.material;
         }
         return go;
+    }
+
+    // Material base URP/Lit guardado en Resources (lo crea ConfigurarDemo.AsegurarRecursos).
+    // Por qué: los objetos se crean en tiempo de ejecución, así que ninguna escena referencia
+    // el shader y Unity lo elimina del build -> todo se ve magenta. Lo que está en Resources
+    // entra siempre al build junto con su shader.
+    static Material matBase;
+    static void Pintar(GameObject go, Color color)
+    {
+        if (matBase == null)
+        {
+            matBase = Resources.Load<Material>("Materiales/MatBase");
+            if (matBase == null) { Debug.LogError("[Quimica] Falta Resources/Materiales/MatBase.mat"); return; }
+        }
+        // URP/Lit marca _BaseColor como [MainColor], por eso funciona .color
+        go.GetComponent<Renderer>().sharedMaterial = new Material(matBase) { color = color };
     }
 
     static Font fuenteCache;

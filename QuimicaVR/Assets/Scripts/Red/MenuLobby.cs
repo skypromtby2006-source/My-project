@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 // Menú completo con IMGUI: no hace falta armar Canvas ni prefabs.
@@ -17,9 +18,18 @@ public class MenuLobby : MonoBehaviour
 
     ClienteRed Red => ClienteRed.I;
 
+    // Nombre automático de este arranque. Solo se guarda en PlayerPrefs un nombre escrito
+    // por el usuario: si se guardara el automático, todas las instancias de la misma PC
+    // (editor y builds comparten PlayerPrefs) arrancarían con el mismo "JugadorNN".
+    string nombreAuto;
+    static bool EsAutomatico(string n) => Regex.IsMatch(n, @"^Jugador\d+$");
+
     void Start()
     {
-        nombre = PlayerPrefs.GetString("nombre", "Jugador" + Random.Range(10, 99));
+        nombreAuto = "Jugador" + Random.Range(100, 1000);
+        var guardado = PlayerPrefs.GetString("nombre", "");
+        // Se descarta un automático guardado por versiones anteriores
+        nombre = guardado == "" || EsAutomatico(guardado) ? nombreAuto : guardado;
         ip = PlayerPrefs.GetString("ip", "127.0.0.1");
 
         Red.AlRecibir += m =>
@@ -80,7 +90,8 @@ public class MenuLobby : MonoBehaviour
         GUILayout.Space(10);
         if (GUILayout.Button("Conectar", GUILayout.Height(45)))
         {
-            PlayerPrefs.SetString("nombre", nombre);
+            if (EsAutomatico(nombre.Trim())) PlayerPrefs.DeleteKey("nombre");
+            else PlayerPrefs.SetString("nombre", nombre);
             PlayerPrefs.SetString("ip", ip);
             aviso = "";
             if (Red.Conectar(ip.Trim(), int.TryParse(puerto, out var p) ? p : 7777, nombre))

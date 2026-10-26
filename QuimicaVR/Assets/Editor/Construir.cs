@@ -20,7 +20,9 @@ namespace Quimica.EditorTools
 
         static void Build(BuildTarget destino, string salida)
         {
+            ConfigurarDemo.AsegurarRecursos();
             ConfigurarDemo.AplicarPlayerSettings();
+            AssetDatabase.SaveAssets();
 
             var escenas = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray();
             if (escenas.Length == 0)

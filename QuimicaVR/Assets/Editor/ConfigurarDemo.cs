@@ -34,9 +34,30 @@ namespace Quimica.EditorTools
             EditorSceneManager.SaveScene(escena, RutaEscena);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(RutaEscena, true) };
 
+            AsegurarRecursos();
             AplicarPlayerSettings();
             AssetDatabase.SaveAssets();
             Debug.Log("[Quimica] Escena demo configurada en " + RutaEscena);
+        }
+
+        const string RutaMatBase = "Assets/Resources/Materiales/MatBase.mat";
+
+        // Recursos que GestorPartida usa en tiempo de ejecución. Como ninguna escena los
+        // referencia, sin esto Unity quita sus shaders del build y todo se ve magenta.
+        public static void AsegurarRecursos()
+        {
+            if (AssetDatabase.LoadAssetAtPath<Material>(RutaMatBase) == null)
+            {
+                var shader = Shader.Find("Universal Render Pipeline/Lit");
+                if (shader == null) { Debug.LogError("[Quimica] No se encontró el shader URP/Lit"); return; }
+                Directory.CreateDirectory(Path.GetDirectoryName(RutaMatBase));
+                AssetDatabase.CreateAsset(new Material(shader), RutaMatBase);
+                Debug.Log("[Quimica] Material base creado en " + RutaMatBase);
+            }
+            // La fuente de los TextMesh (LegacyRuntime.ttf) no necesita nada: viene de los
+            // recursos por defecto, que Unity incluye completos en todo build junto con su shader.
+            // No agregar "GUI/Text Shader" a Always Included Shaders: vive en unity_builtin_extra
+            // y en Unity 6.3 eso hace fallar el build ("Failed to write file unity_builtin_extra").
         }
 
         public static void AplicarPlayerSettings()
