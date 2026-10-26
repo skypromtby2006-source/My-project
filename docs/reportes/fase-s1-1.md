@@ -26,3 +26,4 @@ Pendiente / riesgos:
 Necesito de Jona:
 - Confirmar si borró `CLAUDE.md` a propósito; si no, se restaura con `git checkout -- CLAUDE.md`.
 - Nada más para esta fase; S1-2 (cliente Unity) puede arrancar. Para compilar en batch, el editor de Unity tiene que estar cerrado.
+Commit: 5bf6c4a
