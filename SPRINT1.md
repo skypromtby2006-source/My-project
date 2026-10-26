@@ -101,6 +101,7 @@ El servidor es **la única fuente de verdad** sobre los objetos. **Por qué:** s
 ### Fase S1-3 — Prueba de juego · 🧑 JONA
 - [ ] Editor (Play) = Wizard y build de Linux = Player. Recorrer la misión completa: error con Na, señalamiento, completar y reiniciar.
 - [ ] Pasarle a Claude Code los bugs encontrados. 🤖 Corrige, re-build y reporte S1-3.
+  - [x] Ronda 1 corregida (`pos`/`soltar` con JSON roto, "H2O", etiquetas). Falta repetir la prueba.
 
 ### Fase S1-4 — Entrega v0.2 · 🤖 + 🧑
 - [ ] 🤖 Build de Windows, `empaquetar.sh` → `dist/QuimicaDemo_Windows_v0.2.zip`. Actualizar el LEEME (roles, controles y misión).
