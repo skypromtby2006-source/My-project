@@ -24,3 +24,4 @@ Pendiente / riesgos:
 Necesito de Jona:
 - Repetir la prueba de la S1-3 con el build nuevo: `scripts/servidor_iniciar.sh`, editor → Play (Wizard) y `scripts/jugar_linux.sh 1` (Player). Recorrido: el player se ve moverse, Na → error, señalar, 2 H + 1 O → completada, reiniciar.
 - Si vuelve a aparecer "JSON inválido", mirar `scripts/servidor_logs.sh`: ahora muestra la línea culpable.
+Commit: e318bf7 (reporte: 8ffff11)
