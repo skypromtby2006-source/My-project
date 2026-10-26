@@ -52,3 +52,7 @@ Build/
 dist/
 logs/
 *.log
+
+# ---------- Locales ----------
+# Caché que Unity dejó al crear el proyecto; Jona decidió conservarla, pero no se versiona
+/My project/
