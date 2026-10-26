@@ -1,0 +1,51 @@
+==========================================================
+  Juego de Química — Demo multijugador v0.1 (Windows)
+==========================================================
+
+Contenido
+---------
+  Juego\      El juego: QuimicaDemo.exe
+  Servidor\   Servidor Python + PostgreSQL (Docker) y scripts .bat
+
+
+PASO 1 — Instalar Docker Desktop (solo la primera vez)
+------------------------------------------------------
+  1. Descarga Docker Desktop: https://www.docker.com/products/docker-desktop/
+  2. Instálalo y reinicia la PC si lo pide.
+  3. Ábrelo y espera a que diga "Engine running".
+
+
+PASO 2 — Levantar el servidor
+-----------------------------
+  1. Entra a la carpeta Servidor\
+  2. Doble clic en  instalar_servidor.bat
+     - La primera vez tarda unos minutos (descarga Python y PostgreSQL).
+     - Al final muestra "SERVIDOR LISTO en el puerto 7777" y las IP de esta PC.
+
+  Otros scripts de Servidor\:
+     ver_logs.bat          Ver en vivo lo que pasa en el servidor
+     ver_eventos_bd.bat    Ver los eventos guardados en PostgreSQL
+     detener_servidor.bat  Apagar el servidor (los datos se conservan)
+     abrir_firewall.bat    Solo si otra PC de la red no puede conectar
+                           (clic derecho -> Ejecutar como administrador)
+
+
+PASO 3 — Jugar
+--------------
+  1. Abre  Juego\QuimicaDemo.exe  dos veces (dos ventanas = dos jugadores).
+     Si Windows muestra "Windows protegió su PC": Más información -> Ejecutar de todas formas.
+  2. En cada ventana: IP 127.0.0.1, puerto 7777 -> Conectar.
+  3. Jugador A: "Crear sala" -> aparece el código de 4 letras.
+  4. Jugador B: elige la sala de la lista (o escribe el código) -> marca "Listo".
+  5. Jugador A: "Iniciar".  Ambos se mueven con WASD o las flechas.
+     Esc = salir de la partida.
+
+  Desde otra PC de la misma red: usa la IP que mostró instalar_servidor.bat.
+
+
+Problemas comunes
+-----------------
+  "No se pudo conectar"   El servidor no está arriba (paso 2) o la IP es incorrecta.
+  Otra PC no conecta      Ejecuta abrir_firewall.bat como administrador.
+                          Ambas PCs deben estar en la misma red.
+  Docker no arranca       Abre Docker Desktop a mano y espera "Engine running".
