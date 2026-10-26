@@ -100,14 +100,17 @@ class Sala:
 # Los jugadores aparecen en z=-5 (GestorPartida.cs); el reactor va en el suelo,
 # al otro lado de la mesa, para que haya que caminar con cada esfera.
 ELEMENTOS = ["H", "H", "O", "Na", "Cl", "C"]
-MESA = {"x": 0.0, "y": 0.5, "z": 0.0, "ancho": 3.0, "alto": 1.0, "largo": 1.5}  # centro y tamaño
+MESA = {"x": 0.0, "y": 0.5, "z": 0.0, "ancho": 4.0, "alto": 1.0, "largo": 1.5}  # centro y tamaño
 RADIO_OBJETO = 0.15
-# Las 6 esferas en fila sobre la tapa de la mesa, separadas 0.5 m
-POSICIONES_MESA = [(MESA["x"] - 1.25 + i * 0.5, MESA["y"] + MESA["alto"] / 2 + RADIO_OBJETO, MESA["z"])
+# Las 6 esferas en fila sobre la tapa, centradas. 0.7 m de separación para que las
+# etiquetas del wizard ("Na", "Cl") no se encimen vistas desde la cámara.
+SEPARACION = 0.7
+POSICIONES_MESA = [(round(MESA["x"] + (i - (len(ELEMENTOS) - 1) / 2) * SEPARACION, 3),
+                    MESA["y"] + MESA["alto"] / 2 + RADIO_OBJETO, MESA["z"])
                    for i in range(len(ELEMENTOS))]
 REACTOR = {"x": 0.0, "y": 0.0, "z": 4.0, "radio": 1.0}
 RECETA = {"H": 2, "O": 1}
-FORMULA = "2 H + 1 O → H₂O"
+FORMULA = "2 H + 1 O → H2O"  # sin "₂": la fuente del juego no lo tiene y se veía "H□O"
 
 
 class Objeto:
@@ -447,6 +450,9 @@ async def cliente(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
             try:
                 m = json.loads(linea)
             except json.JSONDecodeError:
+                # Se registra la línea recortada: así un cliente que arma mal el JSON
+                # se diagnostica con servidor_logs.sh sin tener que capturar tráfico.
+                log.warning("JSON inválido de %s (%s): %r", j.id, j.nombre, linea[:120].decode("utf-8", "replace"))
                 await j.enviar({"t": "error", "msg": "JSON inválido"})
                 continue
             try:

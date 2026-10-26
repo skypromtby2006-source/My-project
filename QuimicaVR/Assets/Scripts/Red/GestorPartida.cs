@@ -129,8 +129,9 @@ public class GestorPartida : MonoBehaviour
             malla.transform.localScale = Vector3.one * 2 * m.radio_objeto;
             Pintar(malla, coloresEsfera[i % coloresEsfera.Length], "MatEsfera");
 
-            var etiqueta = CrearEtiqueta(go.transform, "?", Color.white);
-            etiqueta.transform.localPosition = new Vector3(0, m.radio_objeto + .25f, 0);
+            // Más chica y más alta que la de los jugadores, para que no se encime con las vecinas
+            var etiqueta = CrearEtiqueta(go.transform, "?", Color.white, .09f);
+            etiqueta.transform.localPosition = new Vector3(0, m.radio_objeto + .4f, 0);
 
             esferas[info.id] = new Esfera
             {
@@ -161,13 +162,13 @@ public class GestorPartida : MonoBehaviour
         return go;
     }
 
-    static TextMesh CrearEtiqueta(Transform padre, string texto, Color color)
+    static TextMesh CrearEtiqueta(Transform padre, string texto, Color color, float tam = .15f)
     {
         var etiqueta = new GameObject("Etiqueta").AddComponent<TextMesh>();
         etiqueta.transform.SetParent(padre, false);
         etiqueta.text = texto;
         etiqueta.color = color;
-        etiqueta.characterSize = .15f;
+        etiqueta.characterSize = tam;
         etiqueta.fontSize = 40;
         etiqueta.anchor = TextAnchor.MiddleCenter;
         var fuente = FuenteBase();

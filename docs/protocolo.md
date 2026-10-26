@@ -84,14 +84,14 @@ El campo `t` indica el tipo de mensaje.
 ```json
 {
   "objetos": [
-    {"id": "o1", "elemento": "H", "x": -1.25, "y": 1.15, "z": 0.0, "portador": ""},
+    {"id": "o1", "elemento": "H", "x": -1.75, "y": 1.15, "z": 0.0, "portador": ""},
     "... 6 en total: H, H, O, Na, Cl y C"
   ],
   "reactor": {"x": 0.0, "y": 0.0, "z": 4.0, "radio": 1.0},
-  "mesa": {"x": 0.0, "y": 0.5, "z": 0.0, "ancho": 3.0, "alto": 1.0, "largo": 1.5},
+  "mesa": {"x": 0.0, "y": 0.5, "z": 0.0, "ancho": 4.0, "alto": 1.0, "largo": 1.5},
   "radio_objeto": 0.15,
   "receta": [{"elemento": "H", "cantidad": 2}, {"elemento": "O", "cantidad": 1}],
-  "formula": "2 H + 1 O → H₂O",
+  "formula": "2 H + 1 O → H2O",
   "estado": {"reactor": [], "errores": 0, "completada": false, "mensaje": ""}
 }
 ```
@@ -106,7 +106,7 @@ El campo `t` indica el tipo de mensaje.
 
 Al `soltar` dentro del reactor (distancia horizontal al centro ≤ `radio`), el servidor compara el elemento con lo que **falta** de la receta:
 
-- **Falta** → entra al reactor (ya no se puede agarrar) y `mensaje = "H agregado al reactor"`. Si era el último: `completada = true` y `mensaje = "¡Reacción completada! 2 H + 1 O → H₂O"`.
+- **Falta** → entra al reactor (ya no se puede agarrar) y `mensaje = "H agregado al reactor"`. Si era el último: `completada = true` y `mensaje = "¡Reacción completada! 2 H + 1 O → H2O"`.
 - **No falta** → `errores + 1`, el objeto **vuelve a su lugar en la mesa** y `mensaje = "Reacción inestable: Na no va en la receta"`.
 - Fuera del reactor, el objeto simplemente queda donde se soltó.
 

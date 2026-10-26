@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Net.Sockets;
 using System.Text;
@@ -98,6 +99,12 @@ public class ClienteRed : MonoBehaviour
         if (I != null) { Destroy(gameObject); return; }
         I = this;
         DontDestroyOnLoad(gameObject);
+
+        // Red de seguridad (regla 8): si algún número se formatea sin indicar cultura,
+        // que salga con punto aunque Windows/Linux esté en español. Incluye los hilos
+        // nuevos, como el de lectura del socket.
+        CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+        CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
     }
 
     public bool Conectar(string ip, int puerto, string nombre)
@@ -142,22 +149,16 @@ public class ClienteRed : MonoBehaviour
     public void MarcarListo(bool v) => Enviar($"{{\"t\":\"listo\",\"valor\":{(v ? "true" : "false")}}}");
     public void IniciarPartida() => Enviar("{\"t\":\"iniciar\"}");
 
-    public void EnviarPosicion(Vector3 p, float rotY)
-    {
-        var ci = System.Globalization.CultureInfo.InvariantCulture; // evita "1,5" en PCs en español
-        Enviar(string.Format(ci, "{{\"t\":\"pos\",\"x\":{0:F3},\"y\":{1:F3},\"z\":{2:F3},\"ry\":{3:F1}}}", p.x, p.y, p.z, rotY));
-    }
+    public void EnviarPosicion(Vector3 p, float rotY) =>
+        Enviar("{\"t\":\"pos\",\"x\":" + Num(p.x) + ",\"y\":" + Num(p.y) + ",\"z\":" + Num(p.z) + ",\"ry\":" + Num(rotY) + "}");
 
     // ---------- Acciones de la misión (el servidor valida el rol) ----------
     public void Agarrar(string obj) => Enviar($"{{\"t\":\"agarrar\",\"obj\":{Json(obj)}}}");
     public void Senalar(string obj) => Enviar($"{{\"t\":\"senalar\",\"obj\":{Json(obj)}}}");
     public void Reiniciar() => Enviar("{\"t\":\"reiniciar\"}");
 
-    public void Soltar(string obj, Vector3 p)
-    {
-        var ci = System.Globalization.CultureInfo.InvariantCulture; // evita "1,5" en PCs en español
-        Enviar(string.Format(ci, "{{\"t\":\"soltar\",\"obj\":{0},\"x\":{1:F3},\"y\":{2:F3},\"z\":{3:F3}}}", Json(obj), p.x, p.y, p.z));
-    }
+    public void Soltar(string obj, Vector3 p) =>
+        Enviar("{\"t\":\"soltar\",\"obj\":" + Json(obj) + ",\"x\":" + Num(p.x) + ",\"y\":" + Num(p.y) + ",\"z\":" + Num(p.z) + "}");
 
     void Enviar(string json)
     {
@@ -218,6 +219,12 @@ public class ClienteRed : MonoBehaviour
     }
 
     void OnApplicationQuit() => Cerrar();
+
+    // Todo número que viaja en el JSON pasa por aquí: siempre con punto decimal (regla 8).
+    // Los mensajes se arman concatenando y NO con string.Format: en el Mono de Unity,
+    // "{3:F1}}}" toma las llaves "}}" como parte del formato y escribe el texto "F1"
+    // en vez del número, lo que rompía "pos" y "soltar" ("JSON inválido" en el servidor).
+    static string Num(float v) => v.ToString("0.###", CultureInfo.InvariantCulture);
 
     static string Json(string s) =>
         "\"" + (s ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
