@@ -1,9 +1,11 @@
-# Juego de Química VR — Demo multijugador (v0.1)
+# Juego de Química VR — Demo multijugador (v0.2)
 
-Demo del sprint 0: un servidor **Python + PostgreSQL** en Docker y un cliente **Unity 6.3 (URP)** para Windows y Linux.
+Demo de los sprints 0 y 1: un servidor **Python + PostgreSQL** en Docker y un cliente **Unity 6.3 (URP)** para Windows y Linux.
 Los jugadores se conectan por IP, crean una sala o se unen a una (desde la lista o con un código de 4 letras), marcan "Listo", el anfitrión inicia la partida y todos se ven moverse en tiempo real.
 
-> Todavía no tiene VR, login ni contenido de química: eso queda para los siguientes sprints (ver [`docs/backlog.md`](docs/backlog.md)).
+**v0.2 — cooperativo asimétrico:** el anfitrión es el **Wizard** (ve qué elemento es cada esfera y la receta; señala con clic) y los demás son **Players** (llevan las esferas con E, pero solo ven "?"). Misión: llevar 2 H + 1 O al reactor. El servidor es autoritativo y define el escenario completo; los errores quedan en PostgreSQL (`reaccion_fallida`). Controles y reglas en [`entrega/LEEME.txt`](entrega/LEEME.txt).
+
+> Todavía no tiene VR, login ni más misiones: eso queda para los siguientes sprints (ver [`docs/backlog.md`](docs/backlog.md)).
 
 ## Arquitectura
 
@@ -61,7 +63,7 @@ Panel web para inspeccionar PostgreSQL. Está en el perfil `admin` del compose, 
 
 ## Windows (entrega)
 
-Descomprime `QuimicaDemo_Windows_v0.1.zip` y sigue su `LEEME.txt`:
+Descomprime `QuimicaDemo_Windows_v0.2.zip` y sigue su `LEEME.txt`:
 
 1. Instala **Docker Desktop** y espera a que diga *Engine running*.
 2. `Servidor\instalar_servidor.bat`: levanta el servidor y muestra las IP.

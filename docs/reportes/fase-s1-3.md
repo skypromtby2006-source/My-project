@@ -15,13 +15,13 @@ Probado (cómo y resultado):
 - `probar_servidor.sh` → `TODO OK ✔`.
 - Una línea inválida enviada a mano aparece en el log: `[WARNING] JSON inválido de 0fe55f4f (Jugador): '{"t":"soltar","z":F3}\n'`.
 - `Construir.Linux` → `Succeeded (95,3 MB, 0 errores)`.
-- **No probado en pantalla:** la misión completa la vuelve a probar Jona.
+- **Ronda 2, Jona (aprobada por el cliente):** editor (Wizard) + build de Linux (Player). Movimiento remoto, soltar, error con Na, señalamiento, misión completada y reinicio: todo OK.
 
 Pendiente / riesgos:
 - ⚠️ **`v0.1-demo` (el plan de respaldo) tiene el mismo bug en `pos`.** La línea está así desde `e756de0`. En la Fase 3 se comprobó crear sala, unirse, iniciar y el cambio de anfitrión, pero no que el movimiento remoto llegue al otro jugador. Si a las 19:00 se entrega la v0.1, **los jugadores no se verían moverse**. Decisión para el PM: hacer un hotfix de la v0.1 en `main` (una línea en `ClienteRed.cs` y los builds), o confiar en la v0.2.
 - La flecha `→` se vio bien en Linux. En Windows la fuente es la misma, pero conviene revisarla en la S1-4.
 
 Necesito de Jona:
-- Repetir la prueba de la S1-3 con el build nuevo: `scripts/servidor_iniciar.sh`, editor → Play (Wizard) y `scripts/jugar_linux.sh 1` (Player). Recorrido: el player se ve moverse, Na → error, señalar, 2 H + 1 O → completada, reiniciar.
-- Si vuelve a aparecer "JSON inválido", mirar `scripts/servidor_logs.sh`: ahora muestra la línea culpable.
+- Nada para esta fase: **S1-3 cerrada**. Sigue la S1-4 (build de Windows y zip v0.2).
+
 Commit: e318bf7 (reporte: 8ffff11)

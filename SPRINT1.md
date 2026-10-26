@@ -99,12 +99,12 @@ El servidor es **la única fuente de verdad** sobre los objetos. **Por qué:** s
 - [x] Build de Linux, commit y reporte S1-2.
 
 ### Fase S1-3 — Prueba de juego · 🧑 JONA
-- [ ] Editor (Play) = Wizard y build de Linux = Player. Recorrer la misión completa: error con Na, señalamiento, completar y reiniciar.
-- [ ] Pasarle a Claude Code los bugs encontrados. 🤖 Corrige, re-build y reporte S1-3.
-  - [x] Ronda 1 corregida (`pos`/`soltar` con JSON roto, "H2O", etiquetas). Falta repetir la prueba.
+- [x] Editor (Play) = Wizard y build de Linux = Player. Recorrer la misión completa: error con Na, señalamiento, completar y reiniciar.
+- [x] Pasarle a Claude Code los bugs encontrados. 🤖 Corrige, re-build y reporte S1-3.
+  - [x] Ronda 1 corregida (`pos`/`soltar` con JSON roto, "H2O", etiquetas). Ronda 2 aprobada por el cliente.
 
 ### Fase S1-4 — Entrega v0.2 · 🤖 + 🧑
-- [ ] 🤖 Build de Windows, `empaquetar.sh` → `dist/QuimicaDemo_Windows_v0.2.zip`. Actualizar el LEEME (roles, controles y misión).
+- [x] 🤖 Build de Windows, `empaquetar.sh` → `dist/QuimicaDemo_Windows_v0.2.zip`. Actualizar el LEEME (roles, controles y misión).
 - [ ] 🧑 Prueba en Windows 11 con 2 ventanas.
 - [ ] 🤖 Si es OK: merge de `sprint-1` a `main`, tag `v0.2-demo`, push con tags y reporte final.
 - [ ] Si a las **19:00** la S1-4 no está aprobada, **se entrega `v0.1-demo`** y `sprint-1` queda para la próxima presentación.

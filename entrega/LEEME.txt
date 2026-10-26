@@ -1,5 +1,5 @@
 ==========================================================
-  Juego de Química — Demo multijugador v0.1 (Windows)
+  Juego de Química — Demo multijugador v0.2 (Windows)
 ==========================================================
 
 Contenido
@@ -33,17 +33,47 @@ PASO 2 — Levantar el servidor
                            (clic derecho -> Ejecutar como administrador)
 
 
-PASO 3 — Jugar
---------------
+PASO 3 — Entrar a la sala
+-------------------------
   1. Abre  Juego\QuimicaDemo.exe  dos veces (dos ventanas = dos jugadores).
      Si Windows muestra "Windows protegió su PC": Más información -> Ejecutar de todas formas.
   2. En cada ventana: IP 127.0.0.1, puerto 7777 -> Conectar.
-  3. Jugador A: "Crear sala" -> aparece el código de 4 letras.
+  3. Jugador A: "Crear sala" -> aparece el código de 4 letras. A será el WIZARD.
   4. Jugador B: elige la sala de la lista (o escribe el código) -> marca "Listo".
-  5. Jugador A: "Iniciar".  Ambos se mueven con WASD o las flechas.
-     Esc = salir de la partida.
+     B será PLAYER.
+  5. Jugador A: "Iniciar" (hacen falta al menos 2 jugadores).
 
   Desde otra PC de la misma red: usa la IP que mostró instalar_servidor.bat.
+
+
+PASO 4 — Jugar: misión "Sintetizar agua"
+----------------------------------------
+  Juego cooperativo: nadie puede ganar solo. Hablen entre ustedes.
+
+  Roles
+    WIZARD (quien creó la sala)  Ve el símbolo de cada esfera (H, O, Na...) y la
+                                 receta. NO puede agarrar.
+    PLAYER (los demás)           Puede agarrar y llevar esferas, pero solo ve "?".
+
+  Controles
+    Todos     WASD o flechas = moverse        Esc = salir de la partida
+    Wizard    Clic izquierdo en una esfera = señalarla (pulsa 2 s en todas las ventanas)
+              Botón "Reiniciar misión" = empezar de nuevo
+    Player    E cerca de una esfera = agarrarla (la llevas sobre la cabeza)
+              E otra vez = soltarla delante de ti
+
+  La misión
+    Sobre la mesa hay 6 esferas: H, H, O, Na, Cl y C (cambian de lugar en cada
+    misión). Hay que llevar exactamente  2 H + 1 O  al REACTOR (el disco
+    celeste del otro lado de la mesa).
+    - Elemento equivocado: "Reacción inestable", la esfera vuelve a la mesa y
+      suma un error.
+    - Con 2 H + 1 O: "¡Reacción completada! 2 H + 1 O → H2O" para todos.
+
+  Cómo se juega: el Wizard señala una esfera y dice "¡esa es hidrógeno!",
+  y el Player la lleva al reactor.
+
+  Si el Wizard sale de la partida, otro jugador pasa a ser Wizard.
 
 
 Problemas comunes
