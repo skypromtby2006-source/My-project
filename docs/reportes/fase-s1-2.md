@@ -36,3 +36,4 @@ Necesito de Jona (Fase S1-3):
 - Servidor arriba (`scripts/servidor_iniciar.sh`). Editor → Play = Wizard (crea la sala). `scripts/jugar_linux.sh 1` = Player (se une y marca Listo).
 - Recorrer: llevar Na al reactor (error en rojo, vuelve a la mesa), señalar con clic (pulsa en las dos ventanas), completar 2 H + 1 O (mensaje verde) y Reiniciar misión.
 - Avisarme lo que falle, con captura o el texto de la consola.
+Commit: 85cfcba (reporte: bb07ebd)
