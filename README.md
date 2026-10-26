@@ -24,6 +24,7 @@ Requisitos: Docker con Compose (sin `sudo`), Python 3 y Unity `6000.3.27f1` con 
 | `scripts/servidor_detener.sh` | Detiene los contenedores (los datos de la BD se conservan) |
 | `scripts/servidor_logs.sh` | Log del servidor en vivo |
 | `scripts/servidor_eventos.sh [N]` | Últimos N eventos guardados en PostgreSQL |
+| `scripts/pgadmin.sh` | Levanta pgAdmin en http://127.0.0.1:5050 para revisar la BD (ver abajo) |
 | `scripts/probar_servidor.sh` | Prueba de 2 jugadores simulados, sin Unity → `TODO OK ✔` |
 | `scripts/jugar_linux.sh [N]` | Abre N instancias del build de Linux (logs en `logs/`) |
 | `scripts/empaquetar.sh [versión]` | Genera `dist/QuimicaDemo_Windows_<versión>.zip` |
@@ -49,6 +50,15 @@ scripts/jugar_linux.sh 2      # A crea la sala, B se une y marca Listo, A inicia
 scripts/servidor_eventos.sh
 ```
 
+## pgAdmin (opcional)
+
+Panel web para inspeccionar PostgreSQL. Está en el perfil `admin` del compose, así que **no arranca** con la demo normal; solo con `scripts/pgadmin.sh` (Linux) o `Servidor\abrir_pgadmin.bat` (Windows), que ejecutan `docker compose --profile admin up -d pgadmin`.
+
+- URL: http://127.0.0.1:5050 (solo accesible desde la misma PC)
+- Login: `admin@example.com` / `admin123`
+- Registrar la BD: *Add New Server* → pestaña *Connection* → host `db`, puerto `5432`, BD `quimica`, usuario `quimica`, contraseña `quimica123`. Se usa `db` y no `127.0.0.1` porque pgAdmin corre en la red de Docker.
+- La configuración se guarda en el volumen `datos_pgadmin`. Los scripts de detener también lo apagan.
+
 ## Windows (entrega)
 
 Descomprime `QuimicaDemo_Windows_v0.1.zip` y sigue su `LEEME.txt`:
@@ -58,12 +68,13 @@ Descomprime `QuimicaDemo_Windows_v0.1.zip` y sigue su `LEEME.txt`:
 3. Abre `Juego\QuimicaDemo.exe` dos veces y conecta a `127.0.0.1`.
 
 Si otra PC de la red no puede conectar, ejecuta `Servidor\abrir_firewall.bat` como administrador.
+Para ver la BD en el navegador: `Servidor\abrir_pgadmin.bat` (ver la sección pgAdmin).
 
 ## Estructura
 
 ```
 servidor/          servidor Python (server.py, Dockerfile, probar_cliente.py)
-docker-compose.yml servidor + PostgreSQL
+docker-compose.yml servidor + PostgreSQL (+ pgAdmin en el perfil admin)
 QuimicaVR/         proyecto Unity (Assets/Scripts/Red, Assets/Editor)
 scripts/           scripts .sh de Linux
 entrega/           .bat de Windows y LEEME.txt del zip

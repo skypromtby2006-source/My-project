@@ -26,6 +26,9 @@ PASO 2 — Levantar el servidor
      ver_logs.bat          Ver en vivo lo que pasa en el servidor
      ver_eventos_bd.bat    Ver los eventos guardados en PostgreSQL
      detener_servidor.bat  Apagar el servidor (los datos se conservan)
+     abrir_pgadmin.bat     Ver la BD en el navegador: http://127.0.0.1:5050
+                           (admin@example.com / admin123; servidor: host db,
+                           usuario quimica, contraseña quimica123)
      abrir_firewall.bat    Solo si otra PC de la red no puede conectar
                            (clic derecho -> Ejecutar como administrador)
 
