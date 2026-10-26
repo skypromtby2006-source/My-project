@@ -96,34 +96,34 @@ My-project/
 ## 6. Plan de trabajo
 
 ### Fase 0 — Preparación · 🧑 JONA (antes de abrir Claude Code)
-- [ ] Unity Hub → instalar **Unity 6.3 LTS (6000.3.27f1)** con el módulo **Windows Build Support (Mono)**. Linux Build Support ya viene incluido.
-- [ ] Instalar las dependencias:
+- [x] Unity Hub → instalar **Unity 6.3 LTS (6000.3.27f1)** con el módulo **Windows Build Support (Mono)**. Linux Build Support ya viene incluido.
+- [x] Instalar las dependencias:
   ```bash
   sudo pacman -S --needed git github-cli docker docker-compose docker-buildx python zip
   sudo systemctl enable --now docker
   sudo usermod -aG docker $USER    # luego CERRAR SESIÓN y volver a entrar
   gh auth login                    # GitHub.com → HTTPS → login con el navegador
   ```
-- [ ] Clonar el repo y meter el kickoff:
+- [x] Clonar el repo y meter el kickoff:
   ```bash
   mkdir -p ~/Proyectos && cd ~/Proyectos
   git clone https://github.com/skypromtby2006-source/My-project.git
   # copiar CLAUDE.md y la carpeta _base/ dentro de My-project/
   cd My-project && claude
   ```
-- [ ] Primer mensaje a Claude Code: *"Lee CLAUDE.md y arranca la Fase 1"*.
+- [x] Primer mensaje a Claude Code: *"Lee CLAUDE.md y arranca la Fase 1"*.
 
 ### Fase 1 — Repo + servidor · 🤖 CLAUDE CODE
-- [ ] 1.1 Verificar el entorno: `docker info` (sin sudo), `docker compose version`, `python --version`, `git`, `gh auth status` y la ruta del editor Unity. Si algo falla, regla 1.
-- [ ] 1.2 Crear `.gitignore`: el estándar de Unity aplicado a `QuimicaVR/`, más `__pycache__/`, `.venv/`, `Build/`, `dist/`, `logs/` y `*.log`.
-- [ ] 1.3 Mover el código desde `_base/` a la estructura de la sección 4 (servidor, compose y `.bat` a `entrega/windows/`).
-- [ ] 1.4 Crear `scripts/` para Linux (con `chmod +x`), todos usando `docker compose` y ejecutables desde cualquier carpeta del repo:
+- [x] 1.1 Verificar el entorno: `docker info` (sin sudo), `docker compose version`, `python --version`, `git`, `gh auth status` y la ruta del editor Unity. Si algo falla, regla 1.
+- [x] 1.2 Crear `.gitignore`: el estándar de Unity aplicado a `QuimicaVR/`, más `__pycache__/`, `.venv/`, `Build/`, `dist/`, `logs/` y `*.log`.
+- [x] 1.3 Mover el código desde `_base/` a la estructura de la sección 4 (servidor, compose y `.bat` a `entrega/windows/`).
+- [x] 1.4 Crear `scripts/` para Linux (con `chmod +x`), todos usando `docker compose` y ejecutables desde cualquier carpeta del repo:
   - `servidor_iniciar.sh`: `up -d --build`, luego `ps` y muestra las IPs locales (`ip -4 addr`)
   - `servidor_detener.sh`, `servidor_logs.sh`, `servidor_eventos.sh` (consulta a la tabla `eventos` con psql dentro del contenedor)
   - `probar_servidor.sh`: corre `servidor/probar_cliente.py` contra `127.0.0.1:7777`
-- [ ] 1.5 Levantar con Docker y correr `probar_servidor.sh`. **Criterio de terminado:** termina en `TODO OK ✔`, el log dice `Conectado a PostgreSQL` y `servidor_eventos.sh` muestra filas.
-- [ ] 1.6 Escribir `docs/protocolo.md` (tabla de mensajes, tomada del LEEME anterior) y `docs/backlog.md` (vacío, con encabezado).
-- [ ] 1.7 Commit, push y reporte de la Fase 1. **No borres `_base/` todavía.**
+- [x] 1.5 Levantar con Docker y correr `probar_servidor.sh`. **Criterio de terminado:** termina en `TODO OK ✔`, el log dice `Conectado a PostgreSQL` y `servidor_eventos.sh` muestra filas.
+- [x] 1.6 Escribir `docs/protocolo.md` (tabla de mensajes, tomada del LEEME anterior) y `docs/backlog.md` (vacío, con encabezado).
+- [x] 1.7 Commit, push y reporte de la Fase 1. **No borres `_base/` todavía.**
 
 ### Fase 2 — Proyecto Unity · 🧑 JONA, luego 🤖 CLAUDE CODE
 - [ ] 2.1 🧑 Unity Hub → *New project* → **Universal 3D** → nombre **`QuimicaVR`**, ubicación `~/Proyectos/My-project/`. Esperar a que abra, cerrar el editor y avisar a Claude Code.
