@@ -1,0 +1,4 @@
+# cmd.exe interpreta mal etiquetas y goto con finales LF: los .bat siempre en CRLF
+*.bat text eol=crlf
+# bash falla con "\r" al final de las líneas: los .sh siempre en LF
+*.sh  text eol=lf

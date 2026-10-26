@@ -1,0 +1,53 @@
+# ---------- Unity (proyecto en QuimicaVR/) ----------
+# Library/Temp/obj se regeneran al abrir el proyecto; versionarlos solo infla el repo
+QuimicaVR/[Ll]ibrary/
+QuimicaVR/[Tt]emp/
+QuimicaVR/[Oo]bj/
+QuimicaVR/[Bb]uild/
+QuimicaVR/[Bb]uilds/
+QuimicaVR/[Ll]ogs/
+QuimicaVR/[Uu]ser[Ss]ettings/
+QuimicaVR/[Mm]emoryCaptures/
+QuimicaVR/[Rr]ecordings/
+QuimicaVR/Assets/Plugins/Editor/JetBrains*
+QuimicaVR/.vs/
+QuimicaVR/.vscode/
+QuimicaVR/.idea/
+QuimicaVR/.gradle/
+QuimicaVR/ExportedObj/
+QuimicaVR/.consulo/
+QuimicaVR/*.csproj
+QuimicaVR/*.unityproj
+QuimicaVR/*.sln
+QuimicaVR/*.suo
+QuimicaVR/*.tmp
+QuimicaVR/*.user
+QuimicaVR/*.userprefs
+QuimicaVR/*.pidb
+QuimicaVR/*.booproj
+QuimicaVR/*.svd
+QuimicaVR/*.pdb
+QuimicaVR/*.mdb
+QuimicaVR/*.opendb
+QuimicaVR/*.VC.db
+QuimicaVR/*.pidb.meta
+QuimicaVR/*.pdb.meta
+QuimicaVR/*.mdb.meta
+QuimicaVR/sysinfo.txt
+QuimicaVR/crashlytics-build.properties
+QuimicaVR/Assets/[Ss]treamingAssets/aa.meta
+QuimicaVR/Assets/[Ss]treamingAssets/aa/*
+*.apk
+*.aab
+*.unitypackage
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+.venv/
+
+# ---------- Salidas del proyecto ----------
+Build/
+dist/
+logs/
+*.log
