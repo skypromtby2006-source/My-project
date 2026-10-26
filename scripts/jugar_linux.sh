@@ -9,8 +9,10 @@ N="${1:-2}"
 JUEGO="Build/Linux/QuimicaDemo.x86_64"
 [ -x "$JUEGO" ] || { echo "No existe $JUEGO. Genera el build primero (Quimica/3. Build Linux)."; exit 1; }
 
-# Sin servidor el juego solo muestra "No se pudo conectar"; se avisa antes para no perder tiempo
-if ! (exec 3<>/dev/tcp/127.0.0.1/7777) 2>/dev/null; then
+# Sin servidor el juego solo muestra "No se pudo conectar"; se avisa antes para no perder tiempo.
+# Se usa ss (¿hay algo escuchando?) en vez de conectarse: una conexión de prueba
+# ensuciaría los logs del servidor y dejaría un evento falso en la BD.
+if [ -z "$(ss -ltnH 'sport = :7777' 2>/dev/null)" ]; then
   echo "Aviso: no hay servidor en 127.0.0.1:7777 (scripts/servidor_iniciar.sh)."
 fi
 
