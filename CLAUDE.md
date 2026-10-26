@@ -139,7 +139,7 @@ My-project/
 - [x] 3.1 🤖 Pedir a Jona que cierre el editor. Luego, en batch, ejecutar `Quimica.EditorTools.Construir.Linux` y después `Quimica.EditorTools.Construir.Windows`. **Criterio:** existen `Build/Linux/QuimicaDemo.x86_64` y `Build/Windows/QuimicaDemo.exe`, y el log muestra `Succeeded`.
 - [x] 3.2 🤖 Crear `scripts/jugar_linux.sh N`, que abre N instancias del build de Linux.
 - [ ] 3.3 🧑 Prueba multijugador en Arch: servidor arriba, `jugar_linux.sh 2`, A crea sala, B se une y marca Listo, A inicia y los dos se mueven con WASD. Además: cerrar A y verificar que B pasa a ser anfitrión.
-- [ ] 3.4 🤖 Corregir lo que Jona reporte, re-build, commit y reporte de la Fase 3.
+- [x] 3.4 🤖 Corregir lo que Jona reporte, re-build, commit y reporte de la Fase 3.
 
 ### Fase 4 — Paquete de entrega Windows · 🤖 CLAUDE CODE
 - [ ] 4.1 Crear `scripts/empaquetar.sh`, que genere `dist/QuimicaDemo_Windows_v0.1.zip` con:
