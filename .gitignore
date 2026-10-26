@@ -19,6 +19,7 @@ QuimicaVR/.consulo/
 QuimicaVR/*.csproj
 QuimicaVR/*.unityproj
 QuimicaVR/*.sln
+QuimicaVR/*.slnx
 QuimicaVR/*.suo
 QuimicaVR/*.tmp
 QuimicaVR/*.user
