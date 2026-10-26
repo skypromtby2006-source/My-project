@@ -31,3 +31,4 @@ Necesito de Jona:
 3. Ventana A crea la sala (Wizard), B se une y marca Listo (Player), A inicia. Recorrer la misión: moverse, Na → error, señalar, 2 H + 1 O → completada, reiniciar. Revisar que la receta se lea bien.
 4. Opcional: `Servidor\ver_eventos_bd.bat` para ver `reaccion_fallida` y `mision_completada`.
 5. Avisarme el resultado: si es OK, hago el merge a `main`, el tag `v0.2-demo` y el reporte final.
+Commit: c436a48
