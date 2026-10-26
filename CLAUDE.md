@@ -138,11 +138,11 @@ My-project/
 ### Fase 3 — Builds y prueba en Linux · 🤖 CLAUDE CODE, luego 🧑 JONA
 - [x] 3.1 🤖 Pedir a Jona que cierre el editor. Luego, en batch, ejecutar `Quimica.EditorTools.Construir.Linux` y después `Quimica.EditorTools.Construir.Windows`. **Criterio:** existen `Build/Linux/QuimicaDemo.x86_64` y `Build/Windows/QuimicaDemo.exe`, y el log muestra `Succeeded`.
 - [x] 3.2 🤖 Crear `scripts/jugar_linux.sh N`, que abre N instancias del build de Linux.
-- [ ] 3.3 🧑 Prueba multijugador en Arch: servidor arriba, `jugar_linux.sh 2`, A crea sala, B se une y marca Listo, A inicia y los dos se mueven con WASD. Además: cerrar A y verificar que B pasa a ser anfitrión.
+- [x] 3.3 🧑 Prueba multijugador en Arch: servidor arriba, `jugar_linux.sh 2`, A crea sala, B se une y marca Listo, A inicia y los dos se mueven con WASD. Además: cerrar A y verificar que B pasa a ser anfitrión.
 - [x] 3.4 🤖 Corregir lo que Jona reporte, re-build, commit y reporte de la Fase 3.
 
 ### Fase 4 — Paquete de entrega Windows · 🤖 CLAUDE CODE
-- [ ] 4.1 Crear `scripts/empaquetar.sh`, que genere `dist/QuimicaDemo_Windows_v0.1.zip` con:
+- [x] 4.1 Crear `scripts/empaquetar.sh`, que genere `dist/QuimicaDemo_Windows_v0.1.zip` con:
   ```
   QuimicaDemo/
   ├─ Juego/          ← todo Build/Windows/
@@ -150,8 +150,8 @@ My-project/
   └─ LEEME.txt       ← pasos para Windows (Docker Desktop → instalar_servidor.bat → abrir el juego)
   ```
   Comprobar que los `.bat` tengan finales de línea **CRLF**. **Por qué:** con LF, `cmd.exe` puede ejecutar mal las etiquetas y los `goto`.
-- [ ] 4.2 Escribir el `README.md` del repo: qué es, cómo correrlo en Linux (scripts/) y en Windows (zip), arquitectura en 5 líneas y el enlace a `docs/protocolo.md`.
-- [ ] 4.3 Borrar `_base/` (ya migrado), hacer commit, `git tag v0.1-demo`, push con tags y reporte de la Fase 4.
+- [x] 4.2 Escribir el `README.md` del repo: qué es, cómo correrlo en Linux (scripts/) y en Windows (zip), arquitectura en 5 líneas y el enlace a `docs/protocolo.md`.
+- [x] 4.3 Borrar `_base/` (ya migrado), hacer commit, `git tag v0.1-demo`, push con tags y reporte de la Fase 4.
 
 ### Fase 5 — Prueba real en Windows · 🧑 JONA
 - [ ] 5.1 Copiar el zip a un USB o al disco de Windows y reiniciar en **Windows 11**.

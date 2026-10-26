@@ -11,7 +11,7 @@ Probado (cómo y resultado):
 - Nueva comprobación de `ss`: detecta el servidor y deja 0 conexiones en el log del servidor.
 
 Pendiente / riesgos:
-- **Cambio de anfitrión sin verificar en el juego:** en la prueba se cerró primero B (el que se unió), no A, así que no hubo traspaso. A nivel servidor está cubierto por `probar_servidor.sh` (paso 7). Por eso la casilla 3.3 sigue sin marcar.
+- ~~Cambio de anfitrión sin verificar~~ → **Confirmado por Jona** en una segunda prueba: al cerrar A, B pasa a ser anfitrión. Casilla 3.3 marcada.
 - Lo de la 3.4 no tocó Unity, así que no hizo falta re-build.
 
 Necesito de Jona:
