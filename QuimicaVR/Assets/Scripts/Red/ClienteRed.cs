@@ -9,7 +9,25 @@ using System.Threading;
 using UnityEngine;
 
 // ---------- Modelos que llegan del servidor (JsonUtility ignora los campos que no vienen) ----------
-[Serializable] public class InfoJugador { public string id; public string nombre; public bool listo; public string rol; }
+[Serializable] public class InfoJugador { public string id; public string nombre; public string color; public bool listo; public string rol; }
+
+// Perfil: llega en la raíz del mensaje "perfil" (ver docs/protocolo.md)
+[Serializable] public class EntradaHistorial { public string fecha; public float duracion_s; public int errores; }
+
+[Serializable] public class InfoProgreso
+{
+    public int completadas;
+    public float mejor_tiempo_s;   // 0 = todavía sin misiones
+    public int errores_totales;
+    public List<EntradaHistorial> historial = new List<EntradaHistorial>();
+}
+
+[Serializable] public class InfoPerfil
+{
+    public string id;              // id de esta conexión, el mismo que usa la sala
+    public string usuario, nombre, color;
+    public InfoProgreso progreso;
+}
 
 [Serializable] public class InfoSala
 {
@@ -63,6 +81,7 @@ using UnityEngine;
     [NonSerialized] public InfoObjeto objeto;      // mensaje "obj"
     [NonSerialized] public string objId, por;      // mensaje "senal"
     [NonSerialized] public EstadoMision estado;    // mensaje "estado"
+    [NonSerialized] public InfoPerfil perfil;      // mensaje "perfil"
 }
 
 [Serializable] class MsgObj { public InfoObjeto obj; }
@@ -73,8 +92,13 @@ public class ClienteRed : MonoBehaviour
 {
     public static ClienteRed I { get; private set; }
 
+    // La misma paleta que server.py. Aquí solo sirve para dibujar el selector:
+    // el servidor es el que rechaza un color que no esté en la lista.
+    public static readonly string[] Paleta = { "#3FA9F5", "#F5D33F", "#E04FD8", "#4FE07A", "#F5913F", "#E04F4F", "#FFFFFF", "#6A5AE0" };
+
     public bool Conectado => cliente != null && cliente.Connected;
     public string MiId { get; private set; }
+    public InfoPerfil MiPerfil { get; private set; }   // null = sin sesión
     public InfoSala SalaActual { get; private set; }
     public InfoMision MisionActual { get; private set; }
     public EstadoMision EstadoActual => MisionActual?.estado;
@@ -107,7 +131,7 @@ public class ClienteRed : MonoBehaviour
         CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
     }
 
-    public bool Conectar(string ip, int puerto, string nombre)
+    public bool Conectar(string ip, int puerto)
     {
         try
         {
@@ -129,8 +153,7 @@ public class ClienteRed : MonoBehaviour
                 cayoConexion = true;
             }) { IsBackground = true };
             hiloLectura.Start();
-
-            Enviar($"{{\"t\":\"hola\",\"nombre\":{Json(nombre)}}}");
+            // Ya no se manda "hola": la identidad llega con login o registro
             return true;
         }
         catch (Exception e)
@@ -140,6 +163,14 @@ public class ClienteRed : MonoBehaviour
             return false;
         }
     }
+
+    // ---------- Perfil (el servidor responde siempre con "perfil" o "error") ----------
+    public void Registrar(string usuario, string nombre, string color) =>
+        Enviar("{\"t\":\"registro\",\"usuario\":" + Json(usuario) + ",\"nombre\":" + Json(nombre) + ",\"color\":" + Json(color) + "}");
+    public void Login(string usuario) => Enviar("{\"t\":\"login\",\"usuario\":" + Json(usuario) + "}");
+    public void EditarPerfil(string nombre, string color) =>
+        Enviar("{\"t\":\"perfil_editar\",\"nombre\":" + Json(nombre) + ",\"color\":" + Json(color) + "}");
+    public void VerPerfil() => Enviar("{\"t\":\"perfil_ver\"}");
 
     // ---------- Acciones de lobby ----------
     public void ListarSalas() => Enviar("{\"t\":\"listar\"}");
@@ -176,7 +207,12 @@ public class ClienteRed : MonoBehaviour
 
             switch (m.t)
             {
-                case "bienvenido": MiId = m.id; break;
+                case "perfil":
+                    // Los campos del perfil están en la raíz del mensaje y coinciden con InfoPerfil
+                    m.perfil = JsonUtility.FromJson<InfoPerfil>(linea);
+                    MiPerfil = m.perfil;
+                    MiId = m.perfil.id;
+                    break;
                 case "sala": SalaActual = m.sala; break;
                 case "inicio": SalaActual = m.sala; MisionActual = m.mision; break;
                 case "fuera": SalaActual = null; MisionActual = null; break;
@@ -216,6 +252,7 @@ public class ClienteRed : MonoBehaviour
         SalaActual = null;
         MisionActual = null;
         MiId = null;
+        MiPerfil = null;
     }
 
     void OnApplicationQuit() => Cerrar();

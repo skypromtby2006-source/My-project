@@ -31,8 +31,6 @@ public class GestorPartida : MonoBehaviour
         public float senalHasta;
     }
 
-    static readonly Color[] colores = { Color.cyan, Color.yellow, Color.magenta, Color.green, new Color(1f, .5f, 0f), Color.red, Color.white, Color.blue };
-
     // El color va por posición en la mesa (o1..o6) y NO por elemento: como el servidor
     // baraja los elementos en cada misión, el color no delata qué es cada esfera.
     // Sirve para hablar ("la azul") sin que el player pueda saltarse al wizard.
@@ -79,7 +77,9 @@ public class GestorPartida : MonoBehaviour
             {
                 var j = sala.jugadores[i];
                 var inicio = new Vector3(-6 + i * 3f, 1, -5);
-                var go = Crear(j.nombre, colores[i % colores.Length], inicio);
+                // El color es el del perfil, así cada uno se reconoce igual en el lobby y en la partida
+                if (!ColorUtility.TryParseHtmlString(j.color, out var color)) color = Color.white;
+                var go = Crear(j.nombre, color, inicio);
                 if (j.id == ClienteRed.I.MiId) jugadorLocal = go;
                 else remotos[j.id] = new Remoto { go = go, destino = inicio };
             }
