@@ -122,7 +122,7 @@ Los usuarios finales son estudiantes de secundaria, en su mayoría **menores de 
 - [x] Commit, push y reporte S2-1.
 
 ### Fase S2-2 — Cliente Unity · 🤖
-- [ ] Implementar 2.3. Batch sin `error CS`. Build de Linux, commit y reporte S2-2.
+- [x] Implementar 2.3. Batch sin `error CS`. Build de Linux, commit y reporte S2-2.
 
 ### Fase S2-3 — Prueba · 🧑 JONA
 - [ ] Crear 2 perfiles de colores distintos. Editar el nombre de uno **estando en la sala** y verificar que el otro lo ve.
