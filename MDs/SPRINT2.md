@@ -5,9 +5,9 @@
 > Plazo: **hoy 26/10/2026, corte a las 19:00**. Si a esa hora no está aprobado en Windows, se entrega `v0.2-demo`.
 
 ## 0. Requisito previo (bloqueante) · 🧑 JONA + 🤖
-- [ ] 🧑 Validar la v0.2 en Windows 11 (prueba de la S1-4).
-- [ ] 🤖 Merge de `sprint-1` a `main`, tag `v0.2-demo` y push con tags.
-- [ ] 🤖 `git checkout -b sprint-2` **desde main ya con la v0.2**.
+- [x] 🧑 Validar la v0.2 en Windows 11 (prueba de la S1-4).
+- [x] 🤖 Merge de `sprint-1` a `main`, tag `v0.2-demo` y push con tags.
+- [x] 🤖 `git checkout -b sprint-2` **desde main ya con la v0.2**.
 
 **Por qué:** si se empieza el Sprint 2 antes de cerrar la v0.2, se mezclan dos versiones a medio probar y se pierde el respaldo.
 
@@ -109,8 +109,8 @@ Los usuarios finales son estudiantes de secundaria, en su mayoría **menores de 
 ## 3. Plan de trabajo
 
 ### Fase S2-1 — Servidor · 🤖
-- [ ] Implementar 2.1 y 2.2.
-- [ ] Ampliar `probar_cliente.py` (crear un `probar_perfiles.py` aparte si queda muy largo). Debe comprobar:
+- [x] Implementar 2.1 y 2.2.
+- [x] Ampliar `probar_cliente.py` (crear un `probar_perfiles.py` aparte si queda muy largo). Debe comprobar:
   1. `crear_sala` sin login → error.
   2. Registro OK; registro con un usuario duplicado → error; usuario con formato inválido → error.
   3. Login de un usuario inexistente → error; doble sesión → error.
@@ -118,8 +118,8 @@ Los usuarios finales son estudiantes de secundaria, en su mayoría **menores de 
   5. Misión completada → el Player suma +1 y el Wizard sigue en 0.
   6. Errores atribuidos al Player correcto.
   7. Al reconectar, el progreso persiste (prueba con Docker).
-- [ ] **Criterio de terminado:** todos los tests en `TODO OK ✔`. En pgAdmin se ven `usuarios` y `misiones_completadas` con datos.
-- [ ] Commit, push y reporte S2-1.
+- [x] **Criterio de terminado:** todos los tests en `TODO OK ✔`. En pgAdmin se ven `usuarios` y `misiones_completadas` con datos.
+- [x] Commit, push y reporte S2-1.
 
 ### Fase S2-2 — Cliente Unity · 🤖
 - [ ] Implementar 2.3. Batch sin `error CS`. Build de Linux, commit y reporte S2-2.
