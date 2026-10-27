@@ -6,6 +6,7 @@ Uso:  python probar_cliente.py [ip] [puerto]
 import asyncio
 import json
 import sys
+import uuid
 
 IP = sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"
 PUERTO = int(sys.argv[2]) if len(sys.argv) > 2 else 7777
@@ -40,8 +41,11 @@ def rol_de(sala, jugador_id):
 async def main():
     ana, beto = C("Ana"), C("Beto")
     await ana.conectar(); await beto.conectar()
-    await ana.env(t="hola", nombre="Ana"); ana.id = (await ana.rec("bienvenido"))["id"]
-    await beto.env(t="hola", nombre="Beto"); beto.id = (await beto.rec("bienvenido"))["id"]
+    # Usuarios nuevos en cada corrida: con BD los perfiles persisten y se repetirían
+    sufijo = uuid.uuid4().hex[:6]
+    for c in (ana, beto):
+        await c.env(t="registro", usuario=f"{c.nombre.lower()}_{sufijo}", nombre=c.nombre, color="#3FA9F5")
+        c.id = (await c.rec("perfil"))["id"]
 
     print("1) Ana crea sala: es wizard")
     await ana.env(t="crear_sala", nombre_sala="Lab 1", maximo=4)

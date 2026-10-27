@@ -3,8 +3,11 @@ Servidor multijugador - Juego de Química (demo)
 Protocolo: TCP, un mensaje JSON por línea (terminado en '\n').
 
 Cliente -> servidor:
-  {"t":"hola","nombre":"Ana"}
-  {"t":"listar"}
+  {"t":"registro","usuario":"ana","nombre":"Ana","color":"#3FA9F5"}
+  {"t":"login","usuario":"ana"}
+  {"t":"perfil_editar","nombre":"Ana","color":"#3FA9F5"}
+  {"t":"perfil_ver"}
+  {"t":"listar"}                       (desde aquí, solo con sesión iniciada)
   {"t":"crear_sala","nombre_sala":"Sala 1","maximo":4}
   {"t":"unirse","sala_id":"AB12"}
   {"t":"salir"}
@@ -18,7 +21,7 @@ Cliente -> servidor:
   {"t":"ping"}
 
 Servidor -> cliente:
-  bienvenido, salas, sala, fuera, inicio, pos, salio, obj, senal, estado, error, pong
+  perfil, salas, sala, fuera, inicio, pos, salio, obj, senal, estado, error, pong
 Detalle completo en docs/protocolo.md
 """
 import asyncio
@@ -27,9 +30,11 @@ import logging
 import math
 import os
 import random
+import re
 import string
 import time
 import uuid
+from datetime import datetime, timezone
 
 HOST = "0.0.0.0"
 PUERTO = int(os.getenv("PUERTO", "7777"))
@@ -40,12 +45,52 @@ log = logging.getLogger("servidor")
 
 db = None  # pool de asyncpg (opcional)
 
+# ----------------------------------------------------------------- perfiles
+# La misma paleta está en ClienteRed.cs; el cliente solo la usa para dibujar
+# los botones, la regla la impone el servidor.
+PALETA = ["#3FA9F5", "#F5D33F", "#E04FD8", "#4FE07A", "#F5913F", "#E04F4F", "#FFFFFF", "#6A5AE0"]
+FORMATO_USUARIO = re.compile(r"^[a-z0-9_]{3,16}$")
+MISION_AGUA = "agua"
+# Solo usuario, nombre visible y color: los usuarios son en su mayoría menores
+# de edad, así que no se guarda nada más (minimización de datos).
+
+
+class ErrorPerfil(Exception):
+    """Petición de perfil rechazada; el mensaje se le muestra al jugador tal cual."""
+
+
+def validar_usuario(m: dict) -> str:
+    # Se pasa a minúsculas antes de validar para que "Jona" y "jona" no sean dos perfiles
+    usuario = str(m.get("usuario", "")).strip().lower()
+    if not FORMATO_USUARIO.match(usuario):
+        raise ErrorPerfil("Usuario inválido: de 3 a 16 caracteres, solo letras, números y _")
+    return usuario
+
+
+def validar_nombre_color(m: dict) -> tuple[str, str]:
+    nombre = str(m.get("nombre", "")).strip()
+    if not 1 <= len(nombre) <= 20:
+        raise ErrorPerfil("El nombre visible debe tener de 1 a 20 caracteres")
+    color = str(m.get("color", "")).strip().upper()
+    if color not in PALETA:
+        raise ErrorPerfil("Color no válido: elige uno de la paleta")
+    return nombre, color
+
+
+# Respaldo sin BD (Plan B2): los perfiles viven aquí y se pierden al cerrar.
+usuarios_mem: dict[str, dict] = {}
+misiones_mem: list[dict] = []
+errores_mem: dict[str, int] = {}
+
 
 # ----------------------------------------------------------------- modelos
 class Jugador:
     def __init__(self, writer: asyncio.StreamWriter):
         self.id = uuid.uuid4().hex[:8]
+        self.usuario = ""       # "" = todavía no inició sesión
+        self.usuario_id = None  # id en la tabla usuarios (None sin BD)
         self.nombre = "Jugador"
+        self.color = PALETA[6]
         self.writer = writer
         self.sala = None
         self.listo = False
@@ -88,7 +133,7 @@ class Sala:
             "cantidad": len(self.jugadores),
             "estado": self.estado,
             "jugadores": [
-                {"id": j.id, "nombre": j.nombre, "listo": j.listo, "rol": j.rol}
+                {"id": j.id, "nombre": j.nombre, "color": j.color, "listo": j.listo, "rol": j.rol}
                 for j in self.jugadores.values()
             ],
         }
@@ -136,6 +181,7 @@ class Mision:
         }
         self.reactor: list[str] = []  # ids de los objetos ya aceptados por el reactor
         self.errores = 0
+        self.errores_por: dict[str, int] = {}  # usuario -> errores en esta misión
         self.completada = False
         self.mensaje = ""
         self.t_inicio = time.monotonic()
@@ -175,6 +221,7 @@ def en_reactor(x: float, z: float) -> bool:
 
 salas: dict[str, Sala] = {}
 jugadores: dict[str, Jugador] = {}
+sesiones: dict[str, Jugador] = {}  # usuario -> conexión que lo tiene abierto
 
 
 def nuevo_codigo() -> str:
@@ -190,12 +237,15 @@ def nuevo_codigo() -> str:
 async def iniciar_bd():
     global db
     if not DATABASE_URL:
-        log.info("Sin DATABASE_URL: se trabaja solo en memoria")
+        log.warning("Sin DATABASE_URL: perfiles y progreso solo en memoria, se pierden al cerrar el servidor")
         return
     import asyncpg
     for intento in range(1, 11):
         try:
             db = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=5)
+            # Las tablas se crean aquí y no con un .sql en docker-entrypoint-initdb.d:
+            # Postgres solo corre esos scripts con el volumen vacío, y datos_db ya
+            # existe en las instalaciones anteriores.
             async with db.acquire() as c:
                 await c.execute("""
                     CREATE TABLE IF NOT EXISTS eventos (
@@ -203,13 +253,32 @@ async def iniciar_bd():
                         tipo TEXT NOT NULL,
                         detalle JSONB,
                         fecha TIMESTAMPTZ DEFAULT now()
-                    )""")
+                    );
+                    CREATE TABLE IF NOT EXISTS usuarios (
+                        id SERIAL PRIMARY KEY,
+                        usuario TEXT UNIQUE NOT NULL,
+                        nombre TEXT NOT NULL,
+                        color TEXT NOT NULL,
+                        creado TIMESTAMPTZ DEFAULT now(),
+                        ultimo_login TIMESTAMPTZ
+                    );
+                    CREATE TABLE IF NOT EXISTS misiones_completadas (
+                        id SERIAL PRIMARY KEY,
+                        usuario_id INT REFERENCES usuarios(id),
+                        mision TEXT NOT NULL,
+                        sala TEXT NOT NULL,
+                        duracion_s REAL NOT NULL,
+                        errores INT NOT NULL,
+                        fecha TIMESTAMPTZ DEFAULT now()
+                    );
+                    CREATE INDEX IF NOT EXISTS misiones_por_usuario ON misiones_completadas (usuario_id)""")
             log.info("Conectado a PostgreSQL")
             return
         except Exception as e:
             log.warning("BD no disponible (intento %d/10): %s", intento, e)
             await asyncio.sleep(2)
-    log.error("No se pudo conectar a la BD; se sigue sin persistencia")
+    db = None
+    log.error("No se pudo conectar a la BD; perfiles y progreso solo en memoria, se pierden al cerrar")
 
 
 async def registrar(tipo: str, detalle: dict):
@@ -221,6 +290,142 @@ async def registrar(tipo: str, detalle: dict):
                             tipo, json.dumps(detalle, ensure_ascii=False))
     except Exception as e:
         log.warning("No se pudo registrar evento: %s", e)
+
+
+# Cada función tiene dos caminos (BD y memoria) para que el Plan B2, sin Docker,
+# siga funcionando igual salvo por la persistencia.
+async def buscar_usuario(usuario: str) -> dict | None:
+    if db is None:
+        return usuarios_mem.get(usuario)
+    async with db.acquire() as c:
+        fila = await c.fetchrow("SELECT id, usuario, nombre, color FROM usuarios WHERE usuario = $1", usuario)
+    return dict(fila) if fila else None
+
+
+async def crear_usuario(usuario: str, nombre: str, color: str) -> dict | None:
+    """Devuelve None si el usuario ya existe."""
+    if db is None:
+        if usuario in usuarios_mem:
+            return None
+        usuarios_mem[usuario] = {"id": None, "usuario": usuario, "nombre": nombre, "color": color}
+        return usuarios_mem[usuario]
+    # ON CONFLICT en vez de consultar antes: si dos clientes registran el mismo
+    # usuario a la vez, la restricción UNIQUE decide sin carrera.
+    async with db.acquire() as c:
+        fila = await c.fetchrow(
+            "INSERT INTO usuarios (usuario, nombre, color, ultimo_login) VALUES ($1, $2, $3, now()) "
+            "ON CONFLICT (usuario) DO NOTHING RETURNING id, usuario, nombre, color",
+            usuario, nombre, color)
+    return dict(fila) if fila else None
+
+
+async def marcar_login(usuario: str):
+    if db is not None:
+        async with db.acquire() as c:
+            await c.execute("UPDATE usuarios SET ultimo_login = now() WHERE usuario = $1", usuario)
+
+
+async def actualizar_usuario(usuario: str, nombre: str, color: str):
+    if db is None:
+        usuarios_mem[usuario].update(nombre=nombre, color=color)
+        return
+    async with db.acquire() as c:
+        await c.execute("UPDATE usuarios SET nombre = $2, color = $3 WHERE usuario = $1", usuario, nombre, color)
+
+
+async def guardar_mision(j: "Jugador", sala: str, duracion_s: float, errores: int):
+    if db is None:
+        misiones_mem.append({"usuario": j.usuario, "mision": MISION_AGUA, "sala": sala,
+                             "duracion_s": duracion_s, "errores": errores,
+                             "fecha": datetime.now(timezone.utc)})
+        return
+    async with db.acquire() as c:
+        await c.execute(
+            "INSERT INTO misiones_completadas (usuario_id, mision, sala, duracion_s, errores) "
+            "VALUES ($1, $2, $3, $4, $5)", j.usuario_id, MISION_AGUA, sala, duracion_s, errores)
+
+
+async def progreso(j: "Jugador") -> dict:
+    # Los errores totales salen de los reaccion_fallida de eventos y no de
+    # misiones_completadas: así también cuentan los de misiones reiniciadas o
+    # abandonadas, y es el mismo dato que se analiza con pandas.
+    if db is None:
+        propias = [x for x in misiones_mem if x["usuario"] == j.usuario]
+        tiempos = [x["duracion_s"] for x in propias if x["mision"] == MISION_AGUA]
+        completadas, mejor, errores = len(propias), min(tiempos, default=None), errores_mem.get(j.usuario, 0)
+        historial = sorted(propias, key=lambda x: x["fecha"], reverse=True)[:5]
+    else:
+        async with db.acquire() as c:
+            fila = await c.fetchrow(
+                "SELECT count(*) AS n, min(duracion_s) FILTER (WHERE mision = $2) AS mejor "
+                "FROM misiones_completadas WHERE usuario_id = $1", j.usuario_id, MISION_AGUA)
+            errores = await c.fetchval(
+                "SELECT count(*) FROM eventos WHERE tipo = 'reaccion_fallida' AND detalle->>'usuario' = $1",
+                j.usuario)
+            historial = await c.fetch(
+                "SELECT fecha, duracion_s, errores FROM misiones_completadas "
+                "WHERE usuario_id = $1 ORDER BY fecha DESC LIMIT 5", j.usuario_id)
+        completadas, mejor = fila["n"], fila["mejor"]
+    return {
+        "completadas": completadas,
+        # 0 = todavía sin misiones: JsonUtility no lee null en un float
+        "mejor_tiempo_s": round(mejor, 1) if mejor is not None else 0,
+        "errores_totales": errores,
+        "historial": [{"fecha": h["fecha"].isoformat(timespec="seconds"),
+                       "duracion_s": round(h["duracion_s"], 1), "errores": h["errores"]}
+                      for h in historial],
+    }
+
+
+async def enviar_perfil(j: "Jugador"):
+    # Va el id de conexión porque la sala identifica a los jugadores por él
+    # (host, portador, pos); antes llegaba en "bienvenido".
+    await j.enviar({"t": "perfil", "id": j.id, "usuario": j.usuario, "nombre": j.nombre,
+                    "color": j.color, "progreso": await progreso(j)})
+
+
+async def iniciar_sesion(j: Jugador, datos: dict):
+    j.usuario, j.usuario_id = datos["usuario"], datos["id"]
+    j.nombre, j.color = datos["nombre"], datos["color"]
+    sesiones[j.usuario] = j
+    log.info("Sesión de %s (%s) en la conexión %s", j.usuario, j.nombre, j.id)
+    await registrar("conexion", {"id": j.id, "usuario": j.usuario, "nombre": j.nombre, "ip": j.ip})
+    await enviar_perfil(j)
+
+
+async def manejar_perfil(j: Jugador, t: str, m: dict):
+    if t in ("registro", "login"):
+        if j.usuario:
+            raise ErrorPerfil("Ya iniciaste sesión en esta conexión")
+        usuario = validar_usuario(m)
+        if t == "login" and usuario in sesiones:
+            raise ErrorPerfil("Ese usuario ya tiene una sesión abierta")
+        if t == "registro":
+            nombre, color = validar_nombre_color(m)
+            datos = await crear_usuario(usuario, nombre, color)
+            if datos is None:
+                raise ErrorPerfil("Ese usuario ya existe")
+            await registrar("perfil_creado", {"usuario": usuario})
+        else:
+            datos = await buscar_usuario(usuario)
+            if datos is None:
+                raise ErrorPerfil("Usuario no encontrado")
+            await marcar_login(usuario)
+        # Se vuelve a mirar después de los await: otra conexión pudo entrar con
+        # el mismo usuario mientras se consultaba la BD.
+        if usuario in sesiones:
+            raise ErrorPerfil("Ese usuario ya tiene una sesión abierta")
+        return await iniciar_sesion(j, datos)
+
+    if not j.usuario:
+        raise ErrorPerfil("Inicia sesión primero")
+    if t == "perfil_editar":
+        nombre, color = validar_nombre_color(m)
+        await actualizar_usuario(j.usuario, nombre, color)  # primero la BD: si falla, no queda a medias
+        j.nombre, j.color = nombre, color
+        if j.sala is not None:
+            await difundir(j.sala, {"t": "sala", "sala": j.sala.info()})
+    await enviar_perfil(j)
 
 
 # ----------------------------------------------------------------- lógica
@@ -271,13 +476,22 @@ async def entrar_a_sala(j: Jugador, sala: Sala):
 async def manejar(j: Jugador, m: dict):
     t = m.get("t")
 
-    if t == "hola":
-        nombre = str(m.get("nombre", "")).strip()[:20] or "Jugador"
-        j.nombre = nombre
-        await j.enviar({"t": "bienvenido", "id": j.id, "nombre": j.nombre})
-        await registrar("conexion", {"id": j.id, "nombre": j.nombre, "ip": j.ip})
+    if t in ("registro", "login", "perfil_editar", "perfil_ver"):
+        try:
+            await manejar_perfil(j, t, m)
+        except ErrorPerfil as e:
+            await j.enviar({"t": "error", "msg": str(e)})
+        except Exception:
+            # Con la BD caída a mitad de la demo, el jugador recibe un aviso en vez de quedar esperando
+            log.exception("Error de perfil en %s", t)
+            await j.enviar({"t": "error", "msg": "No se pudo acceder a los perfiles; intenta de nuevo"})
+        return
 
-    elif t == "listar":
+    # Sin identidad no hay a quién asignarle el progreso
+    if t in ("listar", "crear_sala", "unirse") and not j.usuario:
+        return await j.enviar({"t": "error", "msg": "Inicia sesión primero"})
+
+    if t == "listar":
         await j.enviar({"t": "salas", "lista": lista_salas()})
 
     elif t == "crear_sala":
@@ -407,6 +621,7 @@ async def manejar_mision(j: Jugador, t: str, m: dict):
         o.portador = ""
         o.x, o.y, o.z = x, y, z
         evento = None
+        completada_ahora = False
         if mision.completada:
             pass  # se puede seguir moviendo cosas, pero el mensaje de victoria se mantiene
         elif not en_reactor(x, z):
@@ -417,6 +632,7 @@ async def manejar_mision(j: Jugador, t: str, m: dict):
                 mision.reactor.append(o.id)
                 if len(faltan) == 1:  # era el último que faltaba
                     mision.completada = True
+                    completada_ahora = True
                     mision.mensaje = f"¡Reacción completada! {FORMULA}"
                     evento = ("mision_completada", {
                         "sala": sala.id, "errores": mision.errores,
@@ -425,17 +641,33 @@ async def manejar_mision(j: Jugador, t: str, m: dict):
                     mision.mensaje = f"{o.elemento} agregado al reactor"
             else:
                 mision.errores += 1
+                # El error es de quien soltó: permite el análisis por estudiante
+                mision.errores_por[j.usuario] = mision.errores_por.get(j.usuario, 0) + 1
+                if db is None:  # con BD el total se cuenta desde la tabla eventos
+                    errores_mem[j.usuario] = errores_mem.get(j.usuario, 0) + 1
                 o.x, o.y, o.z = o.inicio  # vuelve a la mesa
                 mision.mensaje = f"Reacción inestable: {o.elemento} no va en la receta"
                 # Este evento es el dato de "errores frecuentes" para el análisis posterior
                 evento = ("reaccion_fallida", {
-                    "sala": sala.id, "jugador": j.nombre, "esperado": faltan, "recibido": o.elemento})
+                    "sala": sala.id, "jugador": j.nombre, "usuario": j.usuario,
+                    "esperado": faltan, "recibido": o.elemento})
         await difundir(sala, {"t": "obj", "obj": o.info()})
         await difundir(sala, {"t": "estado", **mision.estado()})
         await registrar("soltar", {"sala": sala.id, "jugador": j.nombre, "obj": o.id,
                                    "elemento": o.elemento, "x": x, "z": z})
         if evento:
             await registrar(*evento)
+        if completada_ahora:
+            await guardar_progreso(sala, mision, evento[1]["duracion_s"])
+
+
+async def guardar_progreso(sala: Sala, mision: Mision, duracion_s: float):
+    # Un registro por cada Player presente al completarse; el Wizard guía pero no suma
+    for p in [x for x in sala.jugadores.values() if x.rol == "player"]:
+        try:
+            await guardar_mision(p, sala.id, duracion_s, mision.errores_por.get(p.usuario, 0))
+        except Exception as e:
+            log.warning("No se pudo guardar el progreso de %s: %s", p.usuario, e)
 
 
 async def cliente(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
@@ -464,8 +696,11 @@ async def cliente(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     finally:
         await salir_de_sala(j)
         jugadores.pop(j.id, None)
+        # Se libera el usuario para que pueda volver a entrar desde otra ventana
+        if sesiones.get(j.usuario) is j:
+            sesiones.pop(j.usuario)
         log.info("Desconectado %s (%s)", j.id, j.nombre)
-        await registrar("desconexion", {"id": j.id, "nombre": j.nombre})
+        await registrar("desconexion", {"id": j.id, "usuario": j.usuario, "nombre": j.nombre})
         try:
             writer.close()
         except Exception:

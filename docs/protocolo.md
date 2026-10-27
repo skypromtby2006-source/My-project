@@ -13,7 +13,8 @@ El campo `t` indica el tipo de mensaje.
 
 | Cliente → Servidor | Servidor → Cliente |
 |---|---|
-| `hola` (nombre) | `bienvenido` (tu id) |
+| `registro`, `login` | `perfil` (tu id, tus datos y tu progreso) |
+| `perfil_editar`, `perfil_ver` | `perfil` (+ `sala` a toda la sala si estás en una) |
 | `listar` | `salas` (lista) |
 | `crear_sala`, `unirse`, `salir` | `sala` (estado completo de la sala), `fuera` |
 | `listo`, `iniciar` (solo anfitrión) | `inicio` |
@@ -23,11 +24,24 @@ El campo `t` indica el tipo de mensaje.
 | `reiniciar` (solo wizard) | `inicio` con la misión nueva |
 | `ping` | `pong` |
 
+## Sesión
+
+- **Primero la identidad:** sin `registro` o `login` previo, el servidor rechaza `listar`, `crear_sala`, `unirse`, `perfil_editar` y `perfil_ver` con `"Inicia sesión primero"`. Sin identidad no hay a quién asignarle el progreso.
+- **Una sesión por usuario:** un segundo `login` con un usuario conectado se rechaza; si no, dos ventanas sumarían progreso al mismo perfil. Al desconectarse, el usuario se libera.
+- Una conexión inicia sesión una sola vez (`"Ya iniciaste sesión en esta conexión"`); para cambiar de usuario se reconecta.
+- `hola`/`bienvenido` ya no existen: la identidad viene del perfil.
+- **Las validaciones las impone el servidor.** El cliente también valida, pero solo por comodidad.
+
+**Paleta** (constante en `server.py` y en `ClienteRed.cs`): `#3FA9F5 #F5D33F #E04FD8 #4FE07A #F5913F #E04F4F #FFFFFF #6A5AE0`. El servidor acepta minúsculas y guarda el color en mayúsculas.
+
 ## Cliente → Servidor
 
 | `t` | Campos | Qué hace | Validaciones del servidor |
 |---|---|---|---|
-| `hola` | `nombre` | Presentarse al conectar | Nombre recortado a 20 caracteres; vacío → `"Jugador"` |
+| `registro` | `usuario`, `nombre`, `color` | Crear un perfil e iniciar sesión con él | `usuario` se pasa a minúsculas y debe cumplir `^[a-z0-9_]{3,16}$` (no se puede cambiar después); `nombre` de 1 a 20 caracteres; `color` de la *paleta*. Usuario repetido → `"Ese usuario ya existe"` |
+| `login` | `usuario` | Iniciar sesión (sin contraseña: decisión del cliente para la demo) | Debe existir (`"Usuario no encontrado"`) y no tener otra sesión abierta (`"Ese usuario ya tiene una sesión abierta"`) |
+| `perfil_editar` | `nombre`, `color` | Cambiar el nombre visible y el color | Mismas reglas que en `registro`. Si estás en una sala, todos reciben `sala` actualizada |
+| `perfil_ver` | — | Pedir el perfil con el progreso al día | Requiere sesión |
 | `listar` | — | Pedir la lista de salas | — |
 | `crear_sala` | `nombre_sala`, `maximo` | Crear sala y entrar como anfitrión | Nombre a 30 caracteres; `maximo` entre 2 y 8 (por defecto 4). Si ya estaba en una sala, primero sale |
 | `unirse` | `sala_id` (código de 4 letras) | Entrar a una sala | Debe existir, estar `esperando` y no estar llena. No distingue mayúsculas |
@@ -45,7 +59,7 @@ El campo `t` indica el tipo de mensaje.
 
 | `t` | Campos | Cuándo |
 |---|---|---|
-| `bienvenido` | `id`, `nombre` | Respuesta a `hola`. `id` identifica al jugador en los demás mensajes |
+| `perfil` | `id`, `usuario`, `nombre`, `color`, `progreso` | Respuesta a `registro`, `login`, `perfil_editar` y `perfil_ver`. `id` es el de la conexión e identifica al jugador en los demás mensajes (`host`, `portador`, `pos`) |
 | `salas` | `lista`: array de *sala* | Respuesta a `listar` |
 | `sala` | `sala`: objeto *sala* | Cada vez que cambia la sala (alguien entra, sale o marca listo). Se envía a todos sus jugadores |
 | `fuera` | — | Confirmación de `salir` |
@@ -69,8 +83,8 @@ El campo `t` indica el tipo de mensaje.
   "cantidad": 2,
   "estado": "esperando",
   "jugadores": [
-    {"id": "3ea3b344", "nombre": "Ana", "listo": false, "rol": "wizard"},
-    {"id": "2fce7993", "nombre": "Beto", "listo": true, "rol": "player"}
+    {"id": "3ea3b344", "nombre": "Ana", "color": "#3FA9F5", "listo": false, "rol": "wizard"},
+    {"id": "2fce7993", "nombre": "Beto", "color": "#E04F4F", "listo": true, "rol": "player"}
   ]
 }
 ```
@@ -78,6 +92,19 @@ El campo `t` indica el tipo de mensaje.
 - `id`: código de 4 caracteres, sin letras confusas (sin `O/0` ni `I/1`).
 - `estado`: `esperando` | `jugando`.
 - `rol`: `wizard` (el anfitrión) | `player` (los demás). Si cambia el anfitrión, cambia el rol.
+- `nombre` y `color` salen del perfil de cada jugador.
+
+### Objeto *perfil*
+
+```json
+{"t": "perfil", "id": "2fce7993", "usuario": "beto", "nombre": "Beto", "color": "#E04F4F",
+ "progreso": {"completadas": 3, "mejor_tiempo_s": 41.2, "errores_totales": 5,
+              "historial": [{"fecha": "2026-10-27T14:03:10+00:00", "duracion_s": 41.2, "errores": 1}]}}
+```
+
+- `mejor_tiempo_s` es el mejor tiempo en "Sintetizar agua"; `0` = todavía sin misiones (`JsonUtility` no lee `null` en un `float`).
+- `errores_totales`: todos los `reaccion_fallida` de ese usuario, también los de misiones reiniciadas o sin terminar.
+- `historial`: las últimas 5 misiones completadas, la más reciente primero. `fecha` en ISO 8601 (UTC).
 
 ### Objeto *misión* (en `inicio`)
 
@@ -112,6 +139,8 @@ Al `soltar` dentro del reactor (distancia horizontal al centro ≤ `radio`), el 
 
 Con la misión completada ya no se puede agarrar; el wizard puede `reiniciar`.
 
+**Progreso:** al completarse, se guarda un registro en `misiones_completadas` por cada **player** presente en la sala, con sus propios errores en esa misión. El wizard guía pero no suma. Cada error se atribuye al player que soltó el elemento.
+
 ## Reglas de la sala
 
 - **Servidor autoritativo:** el servidor valida todo; el cliente solo *pide*. Así un cliente modificado no puede, por ejemplo, iniciar una partida ajena.
@@ -123,8 +152,8 @@ Con la misión completada ya no se puede agarrar; el wizard puede `reiniciar`.
 ## Ejemplo de sesión
 
 ```
-→ {"t":"hola","nombre":"Ana"}
-← {"t":"bienvenido","id":"3ea3b344","nombre":"Ana"}
+→ {"t":"login","usuario":"ana"}
+← {"t":"perfil","id":"3ea3b344","usuario":"ana","nombre":"Ana","color":"#3FA9F5","progreso":{...}}
 → {"t":"crear_sala","nombre_sala":"Lab 1","maximo":4}
 ← {"t":"sala","sala":{"id":"AB12", ... }}
    (Beto se une y marca listo: Ana recibe más mensajes "sala")
@@ -137,7 +166,18 @@ Con la misión completada ya no se puede agarrar; el wizard puede `reiniciar`.
 ## Persistencia (PostgreSQL)
 
 El servidor guarda un registro en la tabla `eventos (id, tipo, detalle JSONB, fecha)`.
-Tipos: `conexion`, `desconexion`, `sala_creada`, `union`, `partida_iniciada`, `sala_cerrada`,
-`agarrar`, `soltar`, `senal`, `reaccion_fallida` (`{esperado, recibido}`: lo que faltaba y lo que entró), `mision_completada` (`{errores, duracion_s}`) y `mision_reiniciada`.
+Tipos: `perfil_creado`, `conexion` (al iniciar sesión), `desconexion`, `sala_creada`, `union`, `partida_iniciada`, `sala_cerrada`,
+`agarrar`, `soltar`, `senal`, `reaccion_fallida` (`{usuario, esperado, recibido}`: quién lo soltó, lo que faltaba y lo que entró), `mision_completada` (`{errores, duracion_s}`) y `mision_reiniciada`.
 `reaccion_fallida` es el dato de "errores frecuentes" para el análisis posterior con pandas.
-Si la BD no está disponible el servidor sigue funcionando en memoria: en una demo en vivo no debe caerse todo por la base de datos.
+Además:
+
+```sql
+usuarios (id, usuario UNIQUE, nombre, color, creado, ultimo_login)
+misiones_completadas (id, usuario_id → usuarios, mision, sala, duracion_s, errores, fecha)
+```
+
+Las tablas se crean con `CREATE TABLE IF NOT EXISTS` al arrancar el servidor y no con un `.sql` en `docker-entrypoint-initdb.d`: Postgres solo ejecuta esos scripts con el volumen vacío, y `datos_db` ya existe en las instalaciones anteriores.
+
+El perfil guarda **solo** usuario, nombre visible y color: los usuarios son estudiantes de secundaria, en su mayoría menores de edad (minimización de datos).
+
+Si la BD no está disponible (o en el Plan B2, sin Docker), el servidor sigue funcionando en memoria, **perfiles y progreso incluidos**, pero se pierden al cerrarlo; lo avisa con un `WARNING` al arrancar. En una demo en vivo no debe caerse todo por la base de datos.
