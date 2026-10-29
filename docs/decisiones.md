@@ -18,7 +18,7 @@ Tomado de la explicación de la demo original (`_base/LEEME_demo_anterior.md`, e
 
 **Posición 15 veces/seg + interpolación:** mandar cada frame (60+) desperdicia red sin mejora visible; con 15 envíos y `Lerp` en los remotos, el movimiento se ve suave.
 
-**El anfitrión se va:** el servidor pasa el rol al siguiente jugador, y si la sala queda vacía la elimina. Así no quedan salas "fantasma" en la lista.
+**Si sale un Player, los demás siguen; si sale el Wizard, la sala se cierra** (decisión del cliente en la prueba S2-3, reemplaza el traspaso de anfitrión del Sprint 1). Un Player que se va no impide terminar la misión: si llevaba un objeto, se cae al suelo donde estaba para que otro lo levante. El Wizard es el único que ve la receta y los elementos, así que pasar el rol a un Player a mitad de partida le daba la respuesta a alguien que estuvo jugando a ciegas. El servidor saca a todos con `fuera` y el motivo, y borra la sala: así no quedan salas "fantasma" en la lista.
 
 **`InvariantCulture` al enviar posiciones:** en una PC con Windows en español, `1.5f.ToString()` da `"1,5"`, lo que rompe el JSON. Es un bug típico en Bolivia/Latinoamérica.
 

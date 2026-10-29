@@ -45,10 +45,24 @@ public class MenuLobby : MonoBehaviour
         Red.AlRecibir += m =>
         {
             if (m.t == "salas") ultimaLista = m;
-            // Al editar el perfil dentro de una sala, el servidor reenvía "sala": no hay
-            // que sacar al jugador de la pantalla de edición por eso.
-            if (m.t == "sala" && pantalla != Pantalla.EditarPerfil) { pantalla = Pantalla.Sala; aviso = ""; }
-            if (m.t == "fuera") { pantalla = Pantalla.Salas; listo = false; Red.ListarSalas(); }
+            // "sala" llega cada vez que algo cambia (alguien entra, sale, marca listo o edita
+            // su perfil). Solo lleva a la pantalla de la sala desde el lobby, al crear o
+            // unirse: antes también sacaba de la partida a todos cuando salía un Player (B2).
+            if (m.t == "sala" && pantalla == Pantalla.Salas) { pantalla = Pantalla.Sala; aviso = ""; }
+            if (m.t == "salio" && pantalla == Pantalla.Partida)
+            {
+                // SalaActual todavía es la de antes: el "sala" sin ese jugador llega después
+                var quien = Red.SalaActual?.jugadores.Find(j => j.id == m.id);
+                aviso = $"{quien?.nombre ?? "Un jugador"} salió de la sala";
+                tAviso = Time.time;
+            }
+            if (m.t == "fuera")
+            {
+                // Con msg, la sala se cerró ("El Wizard salió, la sala se cerró"); sin msg, salí yo
+                pantalla = Pantalla.Salas; listo = false; Red.ListarSalas();
+                aviso = m.msg ?? "";
+                tAviso = Time.time;
+            }
             if (m.t == "inicio") { pantalla = Pantalla.Partida; tMensaje = -99; erroresPrevios = 0; }
             if (m.t == "perfil") AlRecibirPerfil(m.perfil);
             if (m.t == "estado")

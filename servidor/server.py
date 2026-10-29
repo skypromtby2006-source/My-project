@@ -100,8 +100,8 @@ class Jugador:
 
     @property
     def rol(self) -> str:
-        # Se deriva del anfitrión en vez de guardarse aparte: así, cuando el
-        # anfitrión cambia, el rol cambia solo y no hay dos datos que sincronizar.
+        # Se deriva del anfitrión en vez de guardarse aparte: así no hay dos datos
+        # que sincronizar. El anfitrión no cambia nunca: si se va, la sala se cierra.
         if self.sala is not None and self.sala.host_id == self.id:
             return "wizard"
         return "player"
@@ -218,6 +218,8 @@ def en_reactor(x: float, z: float) -> bool:
     # Solo cuenta la distancia horizontal: da igual a qué altura se suelte
     return math.hypot(x - REACTOR["x"], z - REACTOR["z"]) <= REACTOR["radio"]
 
+
+MSG_WIZARD_SALIO = "El Wizard salió, la sala se cerró"
 
 salas: dict[str, Sala] = {}
 jugadores: dict[str, Jugador] = {}
@@ -444,26 +446,32 @@ async def salir_de_sala(j: Jugador):
     sala.jugadores.pop(j.id, None)
     j.sala = None
     j.listo = False
-    if not sala.jugadores:
-        salas.pop(sala.id, None)
-        log.info("Sala %s cerrada (vacía)", sala.id)
-        await registrar("sala_cerrada", {"sala": sala.id})
-        return
-    caidos = [j]
-    if sala.host_id == j.id:  # el host se fue: pasa al siguiente y se vuelve wizard
-        sala.host_id = next(iter(sala.jugadores))
-        # El nuevo wizard ya no puede soltar (regla de rol), así que si llevaba
-        # algo se le cae ahí mismo; si no, el objeto quedaría bloqueado.
-        caidos.append(sala.jugadores[sala.host_id])
+    # Regla del cliente (S2-3), reemplaza el traspaso de anfitrión del Sprint 1: el
+    # Wizard es el único que ve la receta, así que sin él la misión no tiene guía.
+    if sala.host_id == j.id:
+        return await cerrar_sala(sala, MSG_WIZARD_SALIO)
+    # Si sale un Player, los demás siguen jugando, incluso a mitad de la misión
     await difundir(sala, {"t": "salio", "id": j.id})
     await difundir(sala, {"t": "sala", "sala": sala.info()})
     if sala.mision is not None:
-        for quien in caidos:
-            o = sala.mision.objeto_de(quien.id)
-            if o is not None:
-                o.portador = ""
-                o.x, o.y, o.z = quien.x, 0.15, quien.z  # al suelo, donde estaba el jugador
-                await difundir(sala, {"t": "obj", "obj": o.info()})
+        o = sala.mision.objeto_de(j.id)
+        if o is not None:  # si no se suelta, el objeto quedaría bloqueado para siempre
+            o.portador = ""
+            o.x, o.y, o.z = j.x, 0.15, j.z  # al suelo, donde estaba el jugador
+            await difundir(sala, {"t": "obj", "obj": o.info()})
+
+
+async def cerrar_sala(sala: Sala, motivo: str):
+    salas.pop(sala.id, None)
+    quedan = list(sala.jugadores.values())
+    sala.jugadores.clear()
+    for x in quedan:
+        x.sala = None
+        x.listo = False
+    # "fuera" con msg: el cliente vuelve al lobby y muestra el motivo
+    await asyncio.gather(*(x.enviar({"t": "fuera", "msg": motivo}) for x in quedan))
+    log.info("Sala %s cerrada: %s", sala.id, motivo)
+    await registrar("sala_cerrada", {"sala": sala.id, "motivo": motivo, "expulsados": len(quedan)})
 
 
 async def entrar_a_sala(j: Jugador, sala: Sala):

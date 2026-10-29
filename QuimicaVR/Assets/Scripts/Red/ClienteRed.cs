@@ -103,7 +103,7 @@ public class ClienteRed : MonoBehaviour
     public InfoMision MisionActual { get; private set; }
     public EstadoMision EstadoActual => MisionActual?.estado;
 
-    // El rol no se guarda: se lee de la sala cada vez, así refleja el cambio de anfitrión
+    // El rol no se guarda: se lee de la sala cada vez, así la única fuente es el servidor
     public string MiRol => SalaActual?.jugadores.Find(j => j.id == MiId)?.rol ?? "player";
     public bool SoyWizard => MiRol == "wizard";
 

@@ -1,6 +1,7 @@
 """
 Prueba rápida del servidor sin Unity: simula 2 jugadores.
 Ana crea la sala (wizard) y Beto se une (player); recorren la misión del agua.
+Al final, con Caro, prueba qué pasa cuando sale un Player y cuando sale el Wizard.
 Uso:  python probar_cliente.py [ip] [puerto]
 """
 import asyncio
@@ -117,14 +118,44 @@ async def main():
     print("12) Unirse a sala inexistente")
     await beto.env(t="unirse", sala_id="ZZZZ"); await beto.rec("error")
 
-    print("13) Beto agarra algo y Ana se desconecta: Beto pasa a ser wizard y suelta el objeto")
-    obj = m2["objetos"][0]["id"]
-    await beto.env(t="agarrar", obj=obj); await beto.rec("obj"); await ana.rec("obj")
-    ana.w.close()
-    await beto.rec("salio")
-    sala = (await beto.rec("sala"))["sala"]
-    assert sala["host"] == beto.id and rol_de(sala, beto.id) == "wizard"
-    o = (await beto.rec("obj"))["obj"]; assert o["id"] == obj and o["portador"] == ""
+    print("13) Caro se une a otra partida; Beto sale llevando un objeto: los demás siguen")
+    caro = C("Caro")
+    await caro.conectar()
+    await caro.env(t="registro", usuario=f"caro_{sufijo}", nombre="Caro", color="#4FE07A")
+    caro.id = (await caro.rec("perfil"))["id"]
+    await ana.env(t="crear_sala", nombre_sala="Lab 2")
+    codigo2 = (await ana.rec("sala"))["sala"]["id"]
+    for c in (beto, caro):
+        await c.env(t="unirse", sala_id=codigo2); await c.rec("sala")
+        await c.env(t="listo", valor=True); await c.rec("sala")
+    await ana.env(t="iniciar")
+    m3 = (await ana.rec("inicio"))["mision"]; await beto.rec("inicio"); await caro.rec("inicio")
+    obj = m3["objetos"][0]["id"]
+    await beto.env(t="pos", x=-2, y=1, z=-3, ry=0)
+    await beto.env(t="agarrar", obj=obj); await beto.rec("obj"); await caro.rec("obj"); await ana.rec("obj")
+    beto.w.close()  # a mitad de la misión
+    for c in (ana, caro):
+        assert (await c.rec("salio"))["id"] == beto.id
+        sala = (await c.rec("sala"))["sala"]
+        assert sala["estado"] == "jugando" and sala["host"] == ana.id and sala["cantidad"] == 2, sala
+        o = (await c.rec("obj"))["obj"]
+        assert o["id"] == obj and o["portador"] == "" and (o["x"], o["z"]) == (-2, -3), o  # cae donde estaba
+    await caro.env(t="agarrar", obj=obj)  # la misión sigue: Caro puede levantarlo
+    assert (await caro.rec("obj"))["obj"]["portador"] == caro.id
+
+    print("14) Ana (Wizard) sale: la sala se cierra para todos")
+    await ana.env(t="salir"); await ana.rec("fuera")
+    f = await caro.rec("fuera")
+    assert f.get("msg") == "El Wizard salió, la sala se cerró", f
+    await caro.env(t="listar")
+    assert all(s["id"] != codigo2 for s in (await caro.rec("salas"))["lista"])
+
+    print("15) El Wizard se desconecta en la sala de espera: también se cierra")
+    await caro.env(t="crear_sala", nombre_sala="Lab 3")
+    codigo3 = (await caro.rec("sala"))["sala"]["id"]
+    await ana.env(t="unirse", sala_id=codigo3); await ana.rec("sala")
+    caro.w.close()
+    assert (await ana.rec("fuera")).get("msg") == "El Wizard salió, la sala se cerró"
     print("\nTODO OK ✔")
 
 

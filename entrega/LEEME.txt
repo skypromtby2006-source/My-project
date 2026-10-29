@@ -73,7 +73,9 @@ PASO 4 — Jugar: misión "Sintetizar agua"
   Cómo se juega: el Wizard señala una esfera y dice "¡esa es hidrógeno!",
   y el Player la lleva al reactor.
 
-  Si el Wizard sale de la partida, otro jugador pasa a ser Wizard.
+  Si un Player sale, los demás siguen jugando (si llevaba una esfera, se cae
+  al suelo). Si sale el Wizard, la sala se cierra para todos con el aviso
+  "El Wizard salió, la sala se cerró" y todos vuelven a la lista de salas.
 
 
 Problemas comunes

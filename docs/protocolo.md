@@ -62,10 +62,10 @@ El campo `t` indica el tipo de mensaje.
 | `perfil` | `id`, `usuario`, `nombre`, `color`, `progreso` | Respuesta a `registro`, `login`, `perfil_editar` y `perfil_ver`. `id` es el de la conexión e identifica al jugador en los demás mensajes (`host`, `portador`, `pos`) |
 | `salas` | `lista`: array de *sala* | Respuesta a `listar` |
 | `sala` | `sala`: objeto *sala* | Cada vez que cambia la sala (alguien entra, sale o marca listo). Se envía a todos sus jugadores |
-| `fuera` | — | Confirmación de `salir` |
+| `fuera` | `msg` (opcional) | Confirmación de `salir`, o **la sala se cerró** porque salió el Wizard: entonces llega a todos los demás con `msg: "El Wizard salió, la sala se cerró"` y vuelven al lobby |
 | `inicio` | `sala`: objeto *sala*, `mision`: objeto *misión* | El anfitrión inició la partida, o el wizard reinició la misión |
 | `pos` | `id`, `x`, `y`, `z`, `ry` | Posición de otro jugador |
-| `salio` | `id` | Un jugador dejó la sala (o se desconectó) |
+| `salio` | `id` | Un Player dejó la sala (o se desconectó); la partida sigue |
 | `obj` | `obj`: objeto *objeto* | Un objeto cambió (lo agarraron, lo soltaron, volvió a la mesa o se le cayó a alguien) |
 | `senal` | `obj`, `por` (id del wizard) | El wizard señaló un objeto: todos lo hacen pulsar ~2 s |
 | `estado` | `reactor` (símbolos), `errores`, `completada`, `mensaje` | Después de cada `soltar` |
@@ -91,7 +91,7 @@ El campo `t` indica el tipo de mensaje.
 
 - `id`: código de 4 caracteres, sin letras confusas (sin `O/0` ni `I/1`).
 - `estado`: `esperando` | `jugando`.
-- `rol`: `wizard` (el anfitrión) | `player` (los demás). Si cambia el anfitrión, cambia el rol.
+- `rol`: `wizard` (el anfitrión) | `player` (los demás). El anfitrión no cambia: si se va, la sala se cierra.
 - `nombre` y `color` salen del perfil de cada jugador.
 
 ### Objeto *perfil*
@@ -144,10 +144,10 @@ Con la misión completada ya no se puede agarrar; el wizard puede `reiniciar`.
 ## Reglas de la sala
 
 - **Servidor autoritativo:** el servidor valida todo; el cliente solo *pide*. Así un cliente modificado no puede, por ejemplo, iniciar una partida ajena.
-- **Si el anfitrión se va**, el rol pasa al siguiente jugador (los demás reciben `salio` y luego `sala` con el nuevo `host`), que se vuelve **wizard**: sin wizard la misión no se puede ganar.
-- **Si se va alguien que llevaba un objeto**, el objeto cae al suelo en su última posición (`obj` con `portador: ""`). Lo mismo si el player que pasa a wizard llevaba algo, porque un wizard no puede soltar.
+- **Si sale un Player** (con `salir` o porque se desconecta), los demás siguen jugando, incluso a mitad de la misión: reciben `salio` y luego `sala` sin él. Si llevaba un objeto, el objeto cae al suelo en su última posición (`obj` con `portador: ""`) y cualquier Player lo puede levantar.
+- **Si sale el Wizard** (con `salir`, al crear o unirse a otra sala, o porque se desconecta), **la sala se cierra para todos**: los demás reciben `fuera` con `msg: "El Wizard salió, la sala se cerró"` y vuelven al lobby. Vale tanto en la sala de espera como en la partida. Regla del cliente (prueba S2-3); reemplaza el traspaso de anfitrión del Sprint 1, que le daba el rol de Wizard, con la receta a la vista, a alguien que venía jugando a ciegas.
 - **Dos jugadores agarran la misma esfera a la vez:** el servidor atiende un mensaje por vez; el primero se la lleva y el segundo recibe `error`.
-- **Si la sala queda vacía**, se elimina: no quedan salas "fantasma" en la lista.
+- **La sala se elimina** cuando se va el Wizard (que siempre es el último en irse, porque sin él la sala se cierra): no quedan salas "fantasma" en la lista.
 
 ## Ejemplo de sesión
 
@@ -166,7 +166,7 @@ Con la misión completada ya no se puede agarrar; el wizard puede `reiniciar`.
 ## Persistencia (PostgreSQL)
 
 El servidor guarda un registro en la tabla `eventos (id, tipo, detalle JSONB, fecha)`.
-Tipos: `perfil_creado`, `conexion` (al iniciar sesión), `desconexion`, `sala_creada`, `union`, `partida_iniciada`, `sala_cerrada`,
+Tipos: `perfil_creado`, `conexion` (al iniciar sesión), `desconexion`, `sala_creada`, `union`, `partida_iniciada`, `sala_cerrada` (`{motivo, expulsados}`),
 `agarrar`, `soltar`, `senal`, `reaccion_fallida` (`{usuario, esperado, recibido}`: quién lo soltó, lo que faltaba y lo que entró), `mision_completada` (`{errores, duracion_s}`) y `mision_reiniciada`.
 `reaccion_fallida` es el dato de "errores frecuentes" para el análisis posterior con pandas.
 Además:

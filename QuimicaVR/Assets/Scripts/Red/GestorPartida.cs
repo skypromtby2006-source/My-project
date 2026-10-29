@@ -350,7 +350,8 @@ public class GestorPartida : MonoBehaviour
             else
                 e.go.transform.position = Vector3.Lerp(e.go.transform.position, new Vector3(e.info.x, e.info.y, e.info.z), 15 * Time.deltaTime);
 
-            // El rol puede cambiar a mitad de partida (si el anfitrión se va), por eso se revisa cada frame
+            // El rol no cambia a mitad de partida (si el Wizard se va, la sala se cierra), pero
+            // leerlo cada frame es barato y evita guardar una copia que se pueda desincronizar
             e.etiqueta.text = soyWizard ? e.info.elemento : "?";
 
             // Señal del wizard: pulso de escala y brillo. Lo ven todos, también los players:
