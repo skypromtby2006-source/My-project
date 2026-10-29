@@ -246,7 +246,7 @@ public class MenuLobby : MonoBehaviour
         GUILayout.Label($"Misiones completadas: <b>{pr.completadas}</b>", Rico());
         GUILayout.Label("Mejor tiempo en \"Sintetizar agua\": <b>" +
                         (pr.completadas > 0 ? Segundos(pr.mejor_tiempo_s) : "—") + "</b>", Rico());
-        GUILayout.Label($"Errores totales como Player: <b>{pr.errores_totales}</b>", Rico());
+        GUILayout.Label($"Errores cometidos (todas las partidas): <b>{pr.errores_totales}</b>", Rico());
         GUILayout.Space(5);
         GUILayout.Label("<b>Últimas misiones</b>", Rico());
         if (pr.historial.Count == 0) GUILayout.Label("<color=#aaaaaa>Todavía no completaste ninguna.</color>", Rico());
