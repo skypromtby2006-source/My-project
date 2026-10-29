@@ -28,6 +28,7 @@ Requisitos: Docker con Compose (sin `sudo`), Python 3 y Unity `6000.3.27f1` con 
 | `scripts/servidor_eventos.sh [N]` | Últimos N eventos guardados en PostgreSQL |
 | `scripts/pgadmin.sh` | Levanta pgAdmin en http://127.0.0.1:5050 para revisar la BD (ver abajo) |
 | `scripts/probar_servidor.sh` | Prueba de 2 jugadores simulados, sin Unity → `TODO OK ✔` |
+| `scripts/probar_build.sh [escenario…]` | Prueba el **build real** de Linux sin ventana contra el servidor de Docker (Wizard/Player entre partidas, salidas de sala, sesión única, reconexión, progreso) → `TODO OK ✔`. Los escenarios `reinicio` y `progreso` reinician el servidor |
 | `scripts/jugar_linux.sh [N]` | Abre N instancias del build de Linux (logs en `logs/`) |
 | `scripts/empaquetar.sh [versión]` | Genera `dist/QuimicaDemo_Windows_<versión>.zip` |
 

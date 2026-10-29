@@ -129,7 +129,7 @@ Los usuarios finales son estudiantes de secundaria, en su mayoría **menores de 
 - [ ] Completar la misión: el Player ve +1 en *Mi perfil* y el Wizard no.
 - [ ] Cerrar todo, `servidor_detener.sh` y `servidor_iniciar.sh`, volver a entrar: el progreso sigue ahí.
 - [ ] Intentar entrar dos veces con el mismo usuario: debe rechazarse.
-- [ ] 🤖 Corregir lo reportado, re-build y reporte S2-3.
+- [x] 🤖 Corregir lo reportado, re-build y reporte S2-3 (B1–B7, ver `docs/reportes/fase-s2-3.md`).
 
 ### Fase S2-4 — Entrega v0.3 · 🤖 + 🧑
 - [ ] 🤖 Build de Windows, `QuimicaDemo_Windows_v0.3.zip`, LEEME actualizado (perfiles y progreso) y `abrir_pgadmin.bat` incluido.
