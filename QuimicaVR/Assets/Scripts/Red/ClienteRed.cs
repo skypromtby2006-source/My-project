@@ -145,12 +145,28 @@ public class ClienteRed : MonoBehaviour
             escritor = new StreamWriter(flujo, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
             var lector = new StreamReader(flujo, Encoding.UTF8);
 
+            // Antes de pasar al login se confirma que el servidor responde. Con Docker, el
+            // proxy del puerto 7777 acepta la conexión aunque el servidor todavía esté
+            // arrancando y la corta enseguida: el jugador entraba a "Perfil" y lo sacaba
+            // "Se perdió la conexión" (bug B4 de la S2-3).
+            cliente.ReceiveTimeout = 3000;
+            escritor.WriteLine("{\"t\":\"ping\"}");
+            string primera;
+            try { primera = lector.ReadLine(); } catch (IOException) { primera = null; }
+            if (primera == null) throw new Exception("el servidor todavía no responde; espera unos segundos y vuelve a intentar");
+            cliente.ReceiveTimeout = 0;
+            if (!primera.Contains("\"pong\"")) entrada.Enqueue(primera);
+
             cayoConexion = false;
+            var propio = cliente;
             hiloLectura = new Thread(() =>
             {
                 try { string linea; while ((linea = lector.ReadLine()) != null) entrada.Enqueue(linea); }
                 catch { /* socket cerrado */ }
-                cayoConexion = true;
+                // Solo avisa si sigue siendo la conexión actual: el hilo de una conexión
+                // cerrada con "Desconectar" puede terminar después de reconectar, y si no
+                // se comprobara, cerraría la conexión nueva.
+                if (cliente == propio) cayoConexion = true;
             }) { IsBackground = true };
             hiloLectura.Start();
             // Ya no se manda "hola": la identidad llega con login o registro

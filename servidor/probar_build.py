@@ -6,7 +6,7 @@ la prueba S2-3 aunque esos tests dieran TODO OK. Aquí cada "jugador Unity" es e
 ejecutable de Build/Linux en -batchmode, manejado por PruebaAutomatica.cs (los mismos
 métodos que los botones), y los demás jugadores son bots.
 Uso:  python probar_build.py [escenario ...]   (sin argumentos: todos)
-Escenarios: wizard, player, sesion, progreso (este último reinicia el servidor)
+Escenarios: wizard, player, sesion, reinicio, progreso (los dos últimos reinician el servidor)
 """
 import asyncio
 import json
@@ -296,6 +296,24 @@ async def reiniciar_servidor():
     raise TimeoutError("el servidor no volvió a arrancar")
 
 
+async def escenario_reinicio(s):
+    """B4: conectar y entrar apenas termina servidor_iniciar.sh, como lo haría una persona."""
+    u = f"r_{s}"
+    p = Build("reinicio", ["conectar", f"registro|{u}|R{s}|#FFFFFF", "esperar_pantalla|Salas", "marca|reiniciar",
+                           "esperar_pantalla|Conexion", "esperar_senal|iniciar_termino",
+                           "conectar", "esperar|0.5", f"login|{u}", "esperar|3", "reporte|tras_login", "fin"])
+    await p.esperar("MARCA reiniciar")
+    for script in ("servidor_detener.sh", "servidor_iniciar.sh"):  # sin esperar el log del servidor
+        await asyncio.to_thread(subprocess.run, [str(RAIZ / "scripts" / script)], check=True,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    senal("iniciar_termino")
+    r = await p.esperar("REPORTE tras_login", timeout=90)
+    comprobar(r["pantalla"] == "Salas" and r["usuario"] == u,
+              "B4: se puede entrar apenas termina servidor_iniciar.sh", r)
+    await p.esperar("FIN")
+    await reiniciar_servidor()  # deja el servidor escuchando para el siguiente escenario
+
+
 async def escenario_progreso(s):
     """B3: el Player completa la misión y la ve en Mi perfil; B4: reconexión tras reiniciar el servidor."""
     q = f"q_{s}"
@@ -333,7 +351,7 @@ async def escenario_progreso(s):
 
 
 ESCENARIOS = {"wizard": escenario_wizard, "player": escenario_player,
-              "sesion": escenario_sesion, "progreso": escenario_progreso}
+              "sesion": escenario_sesion, "reinicio": escenario_reinicio, "progreso": escenario_progreso}
 
 
 async def main():

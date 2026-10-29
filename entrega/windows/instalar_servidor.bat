@@ -33,6 +33,22 @@ if errorlevel 1 (
   pause & exit /b 1
 )
 
+REM Se espera a que el servidor escuche: Docker acepta conexiones en el 7777 antes,
+REM y un juego que conecta en ese momento queda cortado.
+echo Esperando al servidor...
+set /a intentos=0
+:esperar_servidor
+docker compose logs servidor 2>nul | findstr /c:"Servidor escuchando" >nul
+if not errorlevel 1 goto servidor_ok
+set /a intentos+=1
+if %intentos% geq 60 (
+  echo [X] El servidor no arranco en 60 segundos. Revisa ver_logs.bat
+  pause & exit /b 1
+)
+timeout /t 1 >nul
+goto esperar_servidor
+:servidor_ok
+
 echo.
 echo [2/2] Estado:
 docker compose ps
