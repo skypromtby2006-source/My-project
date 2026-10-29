@@ -63,7 +63,8 @@ def validar_usuario(m: dict) -> str:
     # Se pasa a minúsculas antes de validar para que "Jona" y "jona" no sean dos perfiles
     usuario = str(m.get("usuario", "")).strip().lower()
     if not FORMATO_USUARIO.match(usuario):
-        raise ErrorPerfil("Usuario inválido: de 3 a 16 caracteres, solo letras, números y _")
+        # "guion bajo" en palabras: la fuente del juego no dibuja el carácter "_"
+        raise ErrorPerfil("Usuario inválido: de 3 a 16 caracteres, solo letras, números y guion bajo")
     return usuario
 
 
