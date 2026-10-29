@@ -13,6 +13,7 @@ public class GestorPartida : MonoBehaviour
     public float duracionSenal = 2f;
 
     GameObject escena, jugadorLocal, raizMision;
+    string salaDeLaEscena;   // la sala de la partida dibujada; null = no hay partida
     readonly Dictionary<string, Remoto> remotos = new Dictionary<string, Remoto>();
     readonly Dictionary<string, Esfera> esferas = new Dictionary<string, Esfera>();
     InfoMision mision;
@@ -57,6 +58,10 @@ public class GestorPartida : MonoBehaviour
                 case "inicio": Comenzar(m.sala, m.mision); break;
                 case "pos": MoverRemoto(m); break;
                 case "salio": Quitar(m.id); break;
+                // Al volver al lobby se borra la partida. Antes quedaba viva detrás del menú
+                // y el siguiente "inicio" la tomaba por un reinicio: no se creaban las
+                // cápsulas de los jugadores nuevos (bug B1 de la S2-3).
+                case "fuera": Terminar(); break;
                 case "obj": if (m.objeto != null && esferas.TryGetValue(m.objeto.id, out var e)) e.info = m.objeto; break;
                 case "senal": if (m.objId != null && esferas.TryGetValue(m.objId, out var s)) s.senalHasta = Time.time + duracionSenal; break;
             }
@@ -67,12 +72,14 @@ public class GestorPartida : MonoBehaviour
     void Comenzar(InfoSala sala, InfoMision nueva)
     {
         // "inicio" llega también cuando el wizard reinicia: en ese caso solo se rehace la
-        // misión y los jugadores siguen donde están.
-        bool enCurso = escena != null && jugadorLocal != null;
+        // misión y los jugadores siguen donde están. Se reconoce por el código de sala y no
+        // por "ya hay escena": una escena de otra partida no es un reinicio.
+        bool enCurso = escena != null && jugadorLocal != null && salaDeLaEscena == sala.id;
         if (!enCurso)
         {
             Terminar();
             escena = new GameObject("Escena");
+            salaDeLaEscena = sala.id;
 
             var suelo = GameObject.CreatePrimitive(PrimitiveType.Plane);
             suelo.transform.SetParent(escena.transform);
@@ -89,6 +96,8 @@ public class GestorPartida : MonoBehaviour
                 if (j.id == ClienteRed.I.MiId) jugadorLocal = go;
                 else remotos[j.id] = new Remoto { go = go, destino = inicio };
             }
+            if (jugadorLocal == null)
+                Debug.LogWarning($"[Quimica] Mi id {ClienteRed.I.MiId} no está en la sala {sala.id}: no hay jugador local");
         }
 
         if (nueva == null) { Debug.LogWarning("[Quimica] 'inicio' sin misión: ¿servidor viejo?"); return; }
@@ -357,6 +366,7 @@ public class GestorPartida : MonoBehaviour
     {
         if (escena != null) Destroy(escena);
         escena = null;
+        salaDeLaEscena = null;
         raizMision = null;
         jugadorLocal = null;
         mision = null;
