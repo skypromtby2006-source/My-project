@@ -252,7 +252,8 @@ async def escenario_player(s):
 async def escenario_sesion(s):
     """B4: sesión única con ventanas reales, y que el usuario se libere al cerrar."""
     u = f"u_{s}"
-    a = Build("sesion_a", ["conectar", f"registro|{u}|U{s}|#6A5AE0", "esperar_pantalla|Salas", "marca|logueado",
+    a = Build("sesion_a", ["conectar", "registro|abc|Corto|#6A5AE0", "esperar_aviso|de 4 a 16",  # B7
+                           f"registro|{u}|U{s}|#6A5AE0", "esperar_pantalla|Salas", "marca|logueado",
                            "esperar_senal|cerrar_a", "fin"])
     await a.esperar("MARCA logueado")
     b = Build("sesion_b", ["conectar", f"login|{u}", "esperar|2", "reporte|rechazo",

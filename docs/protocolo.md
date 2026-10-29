@@ -38,7 +38,7 @@ El campo `t` indica el tipo de mensaje.
 
 | `t` | Campos | Qué hace | Validaciones del servidor |
 |---|---|---|---|
-| `registro` | `usuario`, `nombre`, `color` | Crear un perfil e iniciar sesión con él | `usuario` se pasa a minúsculas y debe cumplir `^[a-z0-9_]{3,16}$` (no se puede cambiar después); `nombre` de 1 a 20 caracteres; `color` de la *paleta*. Usuario repetido → `"Ese usuario ya existe"` |
+| `registro` | `usuario`, `nombre`, `color` | Crear un perfil e iniciar sesión con él | `usuario` se pasa a minúsculas y debe cumplir `^[a-z0-9_]{4,16}$` (no se puede cambiar después); `nombre` de 1 a 20 caracteres; `color` de la *paleta*. Usuario repetido → `"Ese usuario ya existe"` |
 | `login` | `usuario` | Iniciar sesión (sin contraseña: decisión del cliente para la demo) | Debe existir (`"Usuario no encontrado"`) y no tener otra sesión abierta (`"Ese usuario ya tiene una sesión abierta"`) |
 | `perfil_editar` | `nombre`, `color` | Cambiar el nombre visible y el color | Mismas reglas que en `registro`. Si estás en una sala, todos reciben `sala` actualizada |
 | `perfil_ver` | — | Pedir el perfil con el progreso al día | Requiere sesión |

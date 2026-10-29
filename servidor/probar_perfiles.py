@@ -83,7 +83,7 @@ async def main():
     assert p["progreso"] == {"completadas": 0, "mejor_tiempo_s": 0, "errores_totales": 0, "historial": []}
     ana.id = p["id"]
     assert "ya existe" in await beto.error(t="registro", usuario=ana.usuario, nombre="X", color="#3FA9F5")
-    for malo in ("ab", "a" * 17, "con espacio", "eñe_1", "a-b-c"):
+    for malo in ("ab", "abc", "a" * 17, "con espacio", "eñe_1", "a-b-c"):
         assert "Usuario inválido" in await beto.error(t="registro", usuario=malo, nombre="X", color="#3FA9F5")
     assert "nombre" in await beto.error(t="registro", usuario=beto.usuario, nombre="  ", color="#3FA9F5")
     assert "nombre" in await beto.error(t="registro", usuario=beto.usuario, nombre="x" * 21, color="#3FA9F5")

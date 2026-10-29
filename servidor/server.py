@@ -49,7 +49,7 @@ db = None  # pool de asyncpg (opcional)
 # La misma paleta está en ClienteRed.cs; el cliente solo la usa para dibujar
 # los botones, la regla la impone el servidor.
 PALETA = ["#3FA9F5", "#F5D33F", "#E04FD8", "#4FE07A", "#F5913F", "#E04F4F", "#FFFFFF", "#6A5AE0"]
-FORMATO_USUARIO = re.compile(r"^[a-z0-9_]{3,16}$")
+FORMATO_USUARIO = re.compile(r"^[a-z0-9_]{4,16}$")
 MISION_AGUA = "agua"
 # Solo usuario, nombre visible y color: los usuarios son en su mayoría menores
 # de edad, así que no se guarda nada más (minimización de datos).
@@ -64,7 +64,7 @@ def validar_usuario(m: dict) -> str:
     usuario = str(m.get("usuario", "")).strip().lower()
     if not FORMATO_USUARIO.match(usuario):
         # "guion bajo" en palabras: la fuente del juego no dibuja el carácter "_"
-        raise ErrorPerfil("Usuario inválido: de 3 a 16 caracteres, solo letras, números y guion bajo")
+        raise ErrorPerfil("Usuario inválido: de 4 a 16 caracteres, solo letras, números y guion bajo")
     return usuario
 
 

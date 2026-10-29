@@ -33,7 +33,7 @@ public class MenuLobby : MonoBehaviour
 
     // Las mismas reglas que server.py. Aquí solo evitan un viaje al servidor:
     // la regla de verdad la impone el servidor.
-    static readonly Regex FormatoUsuario = new Regex(@"^[a-z0-9_]{3,16}$");
+    static readonly Regex FormatoUsuario = new Regex(@"^[a-z0-9_]{4,16}$");
 
     void Start()
     {
@@ -152,7 +152,7 @@ public class MenuLobby : MonoBehaviour
         else
         {
             // "guion bajo" en palabras: la fuente del juego no dibuja el carácter "_"
-            GUILayout.Label("<size=14>De 3 a 16 caracteres: letras, números y guion bajo. No se puede cambiar después.</size>", Rico());
+            GUILayout.Label("<size=14>De 4 a 16 caracteres: letras, números y guion bajo. No se puede cambiar después.</size>", Rico());
             nombrePerfil = Campo("Nombre visible", nombrePerfil);
             SelectorColor();
             GUILayout.Space(10);
@@ -166,7 +166,7 @@ public class MenuLobby : MonoBehaviour
     bool UsuarioValido()
     {
         if (FormatoUsuario.IsMatch(usuario.Trim())) return true;
-        aviso = "Usuario inválido: de 3 a 16 caracteres, solo letras, números y guion bajo";
+        aviso = "Usuario inválido: de 4 a 16 caracteres, solo letras, números y guion bajo";
         return false;
     }
 
