@@ -2,7 +2,7 @@
 
 > Brief del PM para Claude Code. Siguen vigentes **todas** las reglas de `CLAUDE.md`
 > (sin sudo, nada de YAML de Unity a mano, batch con el editor cerrado, InvariantCulture, commits en español, reporte por fase).
-> Plazo: ~~hoy 26/10/2026, corte a las 19:00~~ → **nuevo corte de la v0.3: miércoles 28/10/2026 a las 20:00** (decisión del PM tras revisar S2-1/S2-2). Si a esa hora no está aprobado en Windows, se entrega `v0.2-demo`.
+> Plazo: ~~hoy 26/10/2026, corte a las 19:00~~ → ~~miércoles 28/10/2026 a las 20:00~~ (pasó sin cerrar) → **replanificado por el PM: v0.3 con tag `v0.3-demo` hoy jueves 29/10/2026 antes de las 22:00**.
 
 ## 0. Requisito previo (bloqueante) · 🧑 JONA + 🤖
 - [x] 🧑 Validar la v0.2 en Windows 11 (prueba de la S1-4).
@@ -134,6 +134,6 @@ Los usuarios finales son estudiantes de secundaria, en su mayoría **menores de 
 ### Fase S2-4 — Entrega v0.3 · 🤖 + 🧑
 - [ ] 🤖 Build de Windows, `QuimicaDemo_Windows_v0.3.zip`, LEEME actualizado (perfiles y progreso) y `abrir_pgadmin.bat` incluido.
 - [ ] 🤖 Crear `entrega/windows/iniciar_servidor_sin_docker.bat`: comprobar Python, crear un venv la primera vez, `pip install -r requirements.txt` y ejecutar `server.py` sin `DATABASE_URL`, mostrando las IPs.
-- [ ] 🧑 Prueba en Windows 11. **Ojo:** reconstruir el servidor desde la carpeta nueva (`detener` en la vieja, `instalar` en la nueva).
+- [ ] 🧑 Prueba en Windows 11 **solo con `iniciar_servidor_sin_docker.bat`** (decisión del PM del 29/10: Docker Desktop está roto en esa PC, ver `docs/backlog.md`). Sin BD, los perfiles y el progreso viven en memoria y se pierden al cerrar el servidor: es lo esperado.
 - [ ] 🤖 Si es OK: merge a `main`, tag `v0.3-demo`, push y reporte final.
-- [ ] **Miércoles 28/10 a las 20:00 sin aprobación → se entrega `v0.2-demo`.**
+- [ ] **Jueves 29/10 antes de las 22:00: tag `v0.3-demo`.** Calendario siguiente en `MDs/SPRINT3.md`.
