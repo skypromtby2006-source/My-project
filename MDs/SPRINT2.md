@@ -2,7 +2,7 @@
 
 > Brief del PM para Claude Code. Siguen vigentes **todas** las reglas de `CLAUDE.md`
 > (sin sudo, nada de YAML de Unity a mano, batch con el editor cerrado, InvariantCulture, commits en español, reporte por fase).
-> Plazo: **hoy 26/10/2026, corte a las 19:00**. Si a esa hora no está aprobado en Windows, se entrega `v0.2-demo`.
+> Plazo: ~~hoy 26/10/2026, corte a las 19:00~~ → **nuevo corte de la v0.3: miércoles 28/10/2026 a las 20:00** (decisión del PM tras revisar S2-1/S2-2). Si a esa hora no está aprobado en Windows, se entrega `v0.2-demo`.
 
 ## 0. Requisito previo (bloqueante) · 🧑 JONA + 🤖
 - [x] 🧑 Validar la v0.2 en Windows 11 (prueba de la S1-4).
@@ -35,7 +35,7 @@ Conexión (IP/puerto) → [VENTANA 1] Perfil: Iniciar sesión | Crear perfil
 - Sección **Progreso** (solo lectura):
   - Misiones completadas (total)
   - Mejor tiempo en "Sintetizar agua"
-  - Errores totales cometidos como Player
+  - Errores totales cometidos como Player (etiqueta en pantalla: "Errores cometidos (todas las partidas)"; cuenta todas las partidas, decisión del PM)
   - Historial: las últimas 5 misiones, con fecha, duración y errores
 
 ### Reglas de progreso
@@ -89,7 +89,7 @@ misiones_completadas (
 | `{"t":"perfil_ver"}` | `perfil` |
 | — | `{"t":"perfil","usuario":..,"nombre":..,"color":..,"progreso":{"completadas":3,"mejor_tiempo_s":41.2,"errores_totales":5,"historial":[{fecha,duracion_s,errores}]}}` |
 
-- `hola` deja de usarse: la identidad viene del `login` o del `registro`.
+- `hola` deja de usarse: la identidad viene del `login` o del `registro`. Si el servidor recibe `hola`, responde `error` "Versión del juego desactualizada, descarga la última" (decisión del PM).
 - **Antes del login**, el servidor rechaza `listar`, `crear_sala` y `unirse` con el error "Inicia sesión primero". **Por qué:** sin identidad no hay a quién asignarle el progreso.
 - **Una sesión por usuario:** si `jona` ya está conectado, un segundo `login` como `jona` se rechaza. **Por qué:** si no, dos ventanas sumarían progreso al mismo perfil y el dato quedaría inflado.
 - Las validaciones (formato del usuario, largo del nombre, color en la paleta) se hacen **en el servidor**. El cliente también valida, pero solo por comodidad: la regla la impone el servidor.
@@ -133,6 +133,7 @@ Los usuarios finales son estudiantes de secundaria, en su mayoría **menores de 
 
 ### Fase S2-4 — Entrega v0.3 · 🤖 + 🧑
 - [ ] 🤖 Build de Windows, `QuimicaDemo_Windows_v0.3.zip`, LEEME actualizado (perfiles y progreso) y `abrir_pgadmin.bat` incluido.
+- [ ] 🤖 Crear `entrega/windows/iniciar_servidor_sin_docker.bat`: comprobar Python, crear un venv la primera vez, `pip install -r requirements.txt` y ejecutar `server.py` sin `DATABASE_URL`, mostrando las IPs.
 - [ ] 🧑 Prueba en Windows 11. **Ojo:** reconstruir el servidor desde la carpeta nueva (`detener` en la vieja, `instalar` en la nueva).
 - [ ] 🤖 Si es OK: merge a `main`, tag `v0.3-demo`, push y reporte final.
-- [ ] **19:00 sin aprobación → se entrega `v0.2-demo`.**
+- [ ] **Miércoles 28/10 a las 20:00 sin aprobación → se entrega `v0.2-demo`.**
