@@ -21,6 +21,12 @@ public class GestorPartida : MonoBehaviour
 
     class Remoto { public GameObject go; public Vector3 destino; public float rotY; }
 
+    // Solo lectura, para el reporte de PruebaAutomatica: es lo que el jugador ve en pantalla
+    public bool HayEscena => escena != null;
+    public Vector3? PosicionLocal => jugadorLocal != null ? jugadorLocal.transform.position : (Vector3?)null;
+    public IEnumerable<string> IdsRemotos => remotos.Keys;
+    public Vector3 DestinoRemoto(string id) => remotos[id].destino;
+
     class Esfera
     {
         public InfoObjeto info;

@@ -67,7 +67,7 @@ public class MenuLobby : MonoBehaviour
         aviso = "";
         if (pantalla == Pantalla.Perfil)
         {
-            PlayerPrefs.SetString("usuario", p.usuario);
+            if (!PruebaAutomatica.Activa) PlayerPrefs.SetString("usuario", p.usuario);
             pantalla = Pantalla.Salas;
             proximoRefresco = 0;
         }
@@ -80,12 +80,7 @@ public class MenuLobby : MonoBehaviour
 
     void Update()
     {
-        if (pantalla == Pantalla.Partida && Input.GetKeyDown(KeyCode.Escape))
-        {
-            Red.SalirSala();
-            var gestor = FindFirstObjectByType<GestorPartida>();
-            if (gestor != null) gestor.Terminar();
-        }
+        if (pantalla == Pantalla.Partida && Input.GetKeyDown(KeyCode.Escape)) SalirDeSala();
         if (pantalla == Pantalla.Salas && Time.time > proximoRefresco)
         {
             proximoRefresco = Time.time + 2f;   // refresco automático de la lista
@@ -122,12 +117,7 @@ public class MenuLobby : MonoBehaviour
         ip = Campo("IP del servidor", ip);
         puerto = Campo("Puerto", puerto);
         GUILayout.Space(10);
-        if (GUILayout.Button("Conectar", GUILayout.Height(45)))
-        {
-            PlayerPrefs.SetString("ip", ip);
-            aviso = "";
-            if (Red.Conectar(ip.Trim(), int.TryParse(puerto, out var p) ? p : 7777)) pantalla = Pantalla.Perfil;
-        }
+        if (GUILayout.Button("Conectar", GUILayout.Height(45))) Conectar(ip, puerto);
         GUILayout.Label("<size=14>Local: 127.0.0.1 · En otra PC de la red: la IP que muestra instalar_servidor.bat</size>", Rico());
     }
 
@@ -143,7 +133,7 @@ public class MenuLobby : MonoBehaviour
         if (pestana == 0)
         {
             GUILayout.Space(10);
-            if (GUILayout.Button("Entrar", GUILayout.Height(45)) && UsuarioValido()) Red.Login(usuario.Trim());
+            if (GUILayout.Button("Entrar", GUILayout.Height(45))) Entrar(usuario);
         }
         else
         {
@@ -151,12 +141,11 @@ public class MenuLobby : MonoBehaviour
             nombrePerfil = Campo("Nombre visible", nombrePerfil);
             SelectorColor();
             GUILayout.Space(10);
-            if (GUILayout.Button("Crear", GUILayout.Height(45)) && UsuarioValido() && NombreValido())
-                Red.Registrar(usuario.Trim(), nombrePerfil.Trim(), colorPerfil);
+            if (GUILayout.Button("Crear", GUILayout.Height(45))) CrearPerfil(usuario, nombrePerfil, colorPerfil);
         }
 
         GUILayout.Space(15);
-        if (GUILayout.Button("Desconectar")) { Red.Cerrar(); pantalla = Pantalla.Conexion; aviso = ""; }
+        if (GUILayout.Button("Desconectar")) Desconectar();
     }
 
     bool UsuarioValido()
@@ -200,7 +189,7 @@ public class MenuLobby : MonoBehaviour
     static Rect Encoger(Rect r, float d) => new Rect(r.x + d, r.y + d, r.width - 2 * d, r.height - 2 * d);
 
     // ---------- Ventana 2: editar perfil + progreso ----------
-    void AbrirEditarPerfil()
+    public void AbrirEditarPerfil()
     {
         var p = Red.MiPerfil;
         nombrePerfil = p.nombre;
@@ -225,18 +214,8 @@ public class MenuLobby : MonoBehaviour
 
         GUILayout.Space(8);
         GUILayout.BeginHorizontal();
-        if (GUILayout.Button("Guardar", GUILayout.Height(40)) && NombreValido())
-        {
-            info = "";
-            guardando = true;
-            Red.EditarPerfil(nombrePerfil.Trim(), colorPerfil);
-        }
-        if (GUILayout.Button("Volver", GUILayout.Height(40)))
-        {
-            aviso = info = "";
-            pantalla = Red.SalaActual != null ? Pantalla.Sala : Pantalla.Salas;
-            proximoRefresco = 0;
-        }
+        if (GUILayout.Button("Guardar", GUILayout.Height(40))) GuardarPerfil(nombrePerfil, colorPerfil);
+        if (GUILayout.Button("Volver", GUILayout.Height(40))) Volver();
         GUILayout.EndHorizontal();
 
         GUILayout.Space(15);
@@ -280,13 +259,13 @@ public class MenuLobby : MonoBehaviour
         GUILayout.Label($"Máx. jugadores: {maximo}", GUILayout.Width(200));
         maximo = Mathf.RoundToInt(GUILayout.HorizontalSlider(maximo, 2, 8));
         GUILayout.EndHorizontal();
-        if (GUILayout.Button("Crear sala", GUILayout.Height(40))) Red.CrearSala(nombreSala, maximo);
+        if (GUILayout.Button("Crear sala", GUILayout.Height(40))) CrearSala();
 
         GUILayout.Space(15);
         GUILayout.Label("<b>Unirse por código</b>", Rico());
         GUILayout.BeginHorizontal();
         codigo = GUILayout.TextField(codigo.ToUpper(), 4, GUILayout.Width(120));
-        if (GUILayout.Button("Unirse")) Red.Unirse(codigo);
+        if (GUILayout.Button("Unirse")) Unirse(codigo);
         GUILayout.EndHorizontal();
 
         GUILayout.Space(15);
@@ -300,13 +279,13 @@ public class MenuLobby : MonoBehaviour
                 GUILayout.BeginHorizontal(GUI.skin.box);
                 GUILayout.Label($"[{s.id}] {s.nombre}  ({s.cantidad}/{s.maximo}) {(s.estado == "jugando" ? "· en juego" : "")}");
                 GUI.enabled = s.estado == "esperando" && s.cantidad < s.maximo;
-                if (GUILayout.Button("Entrar", GUILayout.Width(90))) Red.Unirse(s.id);
+                if (GUILayout.Button("Entrar", GUILayout.Width(90))) Unirse(s.id);
                 GUI.enabled = true;
                 GUILayout.EndHorizontal();
             }
         GUILayout.EndScrollView();
 
-        if (GUILayout.Button("Desconectar")) { Red.Cerrar(); pantalla = Pantalla.Conexion; }
+        if (GUILayout.Button("Desconectar")) Desconectar();
     }
 
     void Sala()
@@ -338,19 +317,15 @@ public class MenuLobby : MonoBehaviour
             // Con el Wizard solo nadie puede agarrar: la misión sería imposible
             bool pocos = s.cantidad < 2;
             GUI.enabled = !pocos;
-            if (GUILayout.Button("Iniciar partida", GUILayout.Height(45))) Red.IniciarPartida();
+            if (GUILayout.Button("Iniciar partida", GUILayout.Height(45))) Iniciar();
             GUI.enabled = true;
             if (pocos)
                 GUILayout.Label("<color=#ffb060>Se necesitan al menos 2 jugadores: el Wizard no puede agarrar objetos.</color>", Rico());
             else if (s.jugadores.Exists(j => j.id != s.host && !j.listo))
                 GUILayout.Label("<color=#aaaaaa>Esperando a que todos marquen \"Listo\".</color>", Rico());
         }
-        else if (GUILayout.Button(listo ? "Ya no estoy listo" : "¡Listo!", GUILayout.Height(45)))
-        {
-            listo = !listo;
-            Red.MarcarListo(listo);
-        }
-        if (GUILayout.Button("Salir de la sala")) Red.SalirSala();
+        else if (GUILayout.Button(listo ? "Ya no estoy listo" : "¡Listo!", GUILayout.Height(45))) CambiarListo();
+        if (GUILayout.Button("Salir de la sala")) SalirDeSala();
     }
 
     void Hud()
@@ -393,6 +368,78 @@ public class MenuLobby : MonoBehaviour
             var abajo = new GUIStyle(Rico()) { alignment = TextAnchor.MiddleCenter };
             GUI.Label(new Rect(0, Screen.height - 60, Screen.width, 40), $"<color=#ffb060>{aviso}</color>", abajo);
         }
+    }
+
+    // ---------- Acciones (las llaman los botones y también PruebaAutomatica) ----------
+    // Están separadas del dibujo para que la prueba del build real recorra exactamente
+    // el mismo código que un clic, y no una copia que podría comportarse distinto.
+    public string PantallaActual => pantalla.ToString();
+    public string Aviso => aviso;
+
+    public void Conectar(string ip, string puerto)
+    {
+        this.ip = ip;
+        this.puerto = puerto;
+        if (!PruebaAutomatica.Activa) PlayerPrefs.SetString("ip", ip);
+        aviso = "";
+        if (Red.Conectar(ip.Trim(), int.TryParse(puerto, out var p) ? p : 7777)) pantalla = Pantalla.Perfil;
+    }
+
+    public void Entrar(string usuario)
+    {
+        this.usuario = usuario.ToLowerInvariant();
+        if (UsuarioValido()) Red.Login(this.usuario.Trim());
+    }
+
+    public void CrearPerfil(string usuario, string nombre, string color)
+    {
+        this.usuario = usuario.ToLowerInvariant();
+        nombrePerfil = nombre;
+        colorPerfil = color;
+        if (UsuarioValido() && NombreValido()) Red.Registrar(this.usuario.Trim(), nombrePerfil.Trim(), colorPerfil);
+    }
+
+    public void Desconectar()
+    {
+        Red.Cerrar();
+        pantalla = Pantalla.Conexion;
+        aviso = "";
+    }
+
+    public void GuardarPerfil(string nombre, string color)
+    {
+        nombrePerfil = nombre;
+        colorPerfil = color;
+        if (!NombreValido()) return;
+        info = "";
+        guardando = true;
+        Red.EditarPerfil(nombrePerfil.Trim(), colorPerfil);
+    }
+
+    public void Volver()
+    {
+        aviso = info = "";
+        pantalla = Red.SalaActual != null ? Pantalla.Sala : Pantalla.Salas;
+        proximoRefresco = 0;
+    }
+
+    public void CrearSala() => Red.CrearSala(nombreSala, maximo);
+    public void Unirse(string codigo) => Red.Unirse(codigo);
+    public void Iniciar() => Red.IniciarPartida();
+
+    public void CambiarListo()
+    {
+        listo = !listo;
+        Red.MarcarListo(listo);
+    }
+
+    // ESC en la partida o "Salir de la sala" en la sala
+    public void SalirDeSala()
+    {
+        Red.SalirSala();
+        if (pantalla != Pantalla.Partida) return;
+        var gestor = FindFirstObjectByType<GestorPartida>();
+        if (gestor != null) gestor.Terminar();
     }
 
     string Campo(string etiqueta, string valor)
