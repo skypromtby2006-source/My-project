@@ -142,7 +142,7 @@ class Sala:
 # ----------------------------------------------------------------- misión
 # Única fuente de verdad del escenario: el cliente no tiene posiciones propias y
 # dibuja la mesa, las esferas y el reactor con lo que llega en inicio.mision.
-# Los jugadores aparecen en z=-5 (GestorPartida.cs); el reactor va en el suelo,
+# Los jugadores aparecen en fila en z=-5 (ver apariciones); el reactor va en el suelo,
 # al otro lado de la mesa, para que haya que caminar con cada esfera.
 ELEMENTOS = ["H", "H", "O", "Na", "Cl", "C"]
 MESA = {"x": 0.0, "y": 0.5, "z": 0.0, "ancho": 4.0, "alto": 1.0, "largo": 1.5}  # centro y tamaño
@@ -212,6 +212,19 @@ class Mision:
             "formula": FORMULA,
             "estado": self.estado(),
         }
+
+
+# Puntos de aparición: una fila centrada delante de la mesa, 2.5 m entre jugadores
+# (con 8, de x=-8.75 a 8.75). Los decide el servidor para que cada uno tenga el suyo
+# y todos los clientes coincidan.
+APARICION_Z = -5.0
+SEPARACION_APARICION = 2.5
+
+
+def apariciones(sala: "Sala") -> list[dict]:
+    n = len(sala.jugadores)
+    return [{"id": jid, "x": round((i - (n - 1) / 2) * SEPARACION_APARICION, 2), "y": 1.0, "z": APARICION_Z}
+            for i, jid in enumerate(sala.jugadores)]
 
 
 def en_reactor(x: float, z: float) -> bool:
@@ -555,7 +568,11 @@ async def manejar(j: Jugador, m: dict):
             return await j.enviar({"t": "error", "msg": "Faltan jugadores por marcar 'Listo'"})
         sala.estado = "jugando"
         sala.mision = Mision()
-        await difundir(sala, {"t": "inicio", "sala": sala.info(), "mision": sala.mision.info()})
+        puntos = apariciones(sala)
+        for p in puntos:  # posición inicial: si alguien se va antes de moverse, lo que lleve cae ahí
+            x = sala.jugadores[p["id"]]
+            x.x, x.y, x.z = p["x"], p["y"], p["z"]
+        await difundir(sala, {"t": "inicio", "sala": sala.info(), "mision": sala.mision.info(), "apariciones": puntos})
         log.info("Partida iniciada en %s", sala.id)
         await registrar("partida_iniciada", {"sala": sala.id, "jugadores": len(sala.jugadores)})
 

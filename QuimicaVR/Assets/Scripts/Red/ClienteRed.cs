@@ -66,6 +66,8 @@ using UnityEngine;
     public EstadoMision estado;
 }
 
+[Serializable] public class Aparicion { public string id; public float x, y, z; }
+
 [Serializable] public class Mensaje
 {
     public string t;            // tipo de mensaje
@@ -73,6 +75,7 @@ using UnityEngine;
     public InfoSala sala;
     public List<InfoSala> lista;
     public InfoMision mision;
+    public List<Aparicion> apariciones = new List<Aparicion>();   // en "inicio": dónde aparece cada uno
     public float x, y, z, ry;
 
     // "obj" llega como objeto en el mensaje "obj" y como texto en "senal". JsonUtility

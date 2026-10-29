@@ -55,7 +55,7 @@ public class GestorPartida : MonoBehaviour
         {
             switch (m.t)
             {
-                case "inicio": Comenzar(m.sala, m.mision); break;
+                case "inicio": Comenzar(m.sala, m.mision, m.apariciones); break;
                 case "pos": MoverRemoto(m); break;
                 case "salio": Quitar(m.id); break;
                 // Al volver al lobby se borra la partida. Antes quedaba viva detrás del menú
@@ -69,7 +69,7 @@ public class GestorPartida : MonoBehaviour
         red.AlDesconectar += Terminar;
     }
 
-    void Comenzar(InfoSala sala, InfoMision nueva)
+    void Comenzar(InfoSala sala, InfoMision nueva, List<Aparicion> apariciones)
     {
         // "inicio" llega también cuando el wizard reinicia: en ese caso solo se rehace la
         // misión y los jugadores siguen donde están. Se reconoce por el código de sala y no
@@ -89,7 +89,10 @@ public class GestorPartida : MonoBehaviour
             for (int i = 0; i < sala.jugadores.Count; i++)
             {
                 var j = sala.jugadores[i];
-                var inicio = new Vector3(-6 + i * 3f, 1, -5);
+                // El punto lo decide el servidor, distinto para cada uno (B5 de la S2-3). El
+                // cálculo por índice queda solo para un servidor viejo que no lo mande.
+                var a = apariciones?.Find(x => x.id == j.id);
+                var inicio = a != null ? new Vector3(a.x, a.y, a.z) : new Vector3(-6 + i * 3f, 1, -5);
                 // El color es el del perfil, así cada uno se reconoce igual en el lobby y en la partida
                 if (!ColorUtility.TryParseHtmlString(j.color, out var color)) color = Color.white;
                 var go = Crear(j.nombre, color, inicio);

@@ -70,8 +70,13 @@ async def main():
     print("5) Beto listo, Ana inicia: llega la misión")
     await beto.env(t="listo", valor=True); await beto.rec("sala"); await ana.rec("sala")
     await ana.env(t="iniciar")
-    mision = (await ana.rec("inicio"))["mision"]; await beto.rec("inicio")
+    inicio = await ana.rec("inicio"); await beto.rec("inicio")
+    mision = inicio["mision"]
     assert len(mision["objetos"]) == 6 and mision["estado"]["reactor"] == []
+    # Un punto de aparición por jugador, todos distintos
+    ap = inicio["apariciones"]
+    assert sorted(a["id"] for a in ap) == sorted((ana.id, beto.id)), ap
+    assert len({(a["x"], a["z"]) for a in ap}) == 2, ap
     assert mision["mesa"]["ancho"] > 0 and mision["radio_objeto"] > 0
     por_elem = {}
     for o in mision["objetos"]:
@@ -129,7 +134,9 @@ async def main():
         await c.env(t="unirse", sala_id=codigo2); await c.rec("sala")
         await c.env(t="listo", valor=True); await c.rec("sala")
     await ana.env(t="iniciar")
-    m3 = (await ana.rec("inicio"))["mision"]; await beto.rec("inicio"); await caro.rec("inicio")
+    i3 = await ana.rec("inicio"); await beto.rec("inicio"); await caro.rec("inicio")
+    m3 = i3["mision"]
+    assert len({(a["x"], a["z"]) for a in i3["apariciones"]}) == 3, i3["apariciones"]
     obj = m3["objetos"][0]["id"]
     await beto.env(t="pos", x=-2, y=1, z=-3, ry=0)
     await beto.env(t="agarrar", obj=obj); await beto.rec("obj"); await caro.rec("obj"); await ana.rec("obj")

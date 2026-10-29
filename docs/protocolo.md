@@ -63,7 +63,7 @@ El campo `t` indica el tipo de mensaje.
 | `salas` | `lista`: array de *sala* | Respuesta a `listar` |
 | `sala` | `sala`: objeto *sala* | Cada vez que cambia la sala (alguien entra, sale o marca listo). Se envía a todos sus jugadores |
 | `fuera` | `msg` (opcional) | Confirmación de `salir`, o **la sala se cerró** porque salió el Wizard: entonces llega a todos los demás con `msg: "El Wizard salió, la sala se cerró"` y vuelven al lobby |
-| `inicio` | `sala`: objeto *sala*, `mision`: objeto *misión* | El anfitrión inició la partida, o el wizard reinició la misión |
+| `inicio` | `sala`: objeto *sala*, `mision`: objeto *misión*, `apariciones` | El anfitrión inició la partida, o el wizard reinició la misión. `apariciones` es `[{id, x, y, z}]`: un punto distinto por jugador, en fila delante de la mesa (`z = -5`, 2.5 m entre cada uno). Al reiniciar, los clientes lo ignoran y cada uno sigue donde está |
 | `pos` | `id`, `x`, `y`, `z`, `ry` | Posición de otro jugador |
 | `salio` | `id` | Un Player dejó la sala (o se desconectó); la partida sigue |
 | `obj` | `obj`: objeto *objeto* | Un objeto cambió (lo agarraron, lo soltaron, volvió a la mesa o se le cayó a alguien) |
