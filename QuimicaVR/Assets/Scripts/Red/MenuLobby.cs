@@ -104,6 +104,8 @@ public class MenuLobby : MonoBehaviour
 
     void OnGUI()
     {
+        var fuente = GestorPartida.FuenteBase();   // la misma de los textos 3D: tiene "_" y "₂"
+        if (fuente != null) GUI.skin.font = fuente;
         GUI.skin.label.fontSize = GUI.skin.button.fontSize = GUI.skin.textField.fontSize = 18;
         if (pantalla == Pantalla.Partida) { Hud(); return; }
 

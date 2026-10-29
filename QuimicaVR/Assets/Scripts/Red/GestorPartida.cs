@@ -217,11 +217,16 @@ public class GestorPartida : MonoBehaviour
         go.GetComponent<Renderer>().sharedMaterial = new Material(mat) { color = color };
     }
 
+    // DejaVu Sans (Resources/Fuentes, licencia en Assets/Licencias) para los textos 3D y el
+    // menú. Por qué: la fuente integrada de Unity no dibuja "_" (no se veía en los nombres de
+    // usuario) ni "₂". Se eligió DejaVu y no Noto Sans porque Noto no tiene "→", que usa la receta.
     static Font fuenteCache;
-    static Font FuenteBase()
+    public static Font FuenteBase()
     {
         if (fuenteCache != null) return fuenteCache;
-        // Unity 2022.2+ usa LegacyRuntime.ttf; versiones anteriores, Arial.ttf
+        fuenteCache = Resources.Load<Font>("Fuentes/DejaVuSans");
+        if (fuenteCache != null) return fuenteCache;
+        // Respaldo: Unity 2022.2+ usa LegacyRuntime.ttf; versiones anteriores, Arial.ttf
         try { fuenteCache = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); } catch { }
         if (fuenteCache == null) try { fuenteCache = Resources.GetBuiltinResource<Font>("Arial.ttf"); } catch { }
         return fuenteCache;
