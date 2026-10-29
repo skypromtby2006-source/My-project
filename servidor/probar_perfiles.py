@@ -73,6 +73,7 @@ async def main():
     print("1) Sin sesión no se puede listar, crear sala ni unirse")
     for m in ({"t": "crear_sala"}, {"t": "listar"}, {"t": "unirse", "sala_id": "ABCD"}, {"t": "perfil_ver"}):
         assert "Inicia sesión" in await ana.error(**m)
+    assert "desactualizada" in await ana.error(t="hola", nombre="Viejo")
 
     print("2) Registro OK, duplicado y datos inválidos")
     await ana.env(t="registro", usuario=ana.usuario.upper(), nombre="Ana", color="#3fa9f5")

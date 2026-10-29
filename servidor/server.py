@@ -487,6 +487,10 @@ async def manejar(j: Jugador, m: dict):
             await j.enviar({"t": "error", "msg": "No se pudo acceder a los perfiles; intenta de nuevo"})
         return
 
+    # Un cliente de la v0.2 o anterior abre con hola y se quedaría esperando un bienvenido que ya no existe
+    if t == "hola":
+        return await j.enviar({"t": "error", "msg": "Versión del juego desactualizada, descarga la última"})
+
     # Sin identidad no hay a quién asignarle el progreso
     if t in ("listar", "crear_sala", "unirse") and not j.usuario:
         return await j.enviar({"t": "error", "msg": "Inicia sesión primero"})

@@ -29,7 +29,7 @@ El campo `t` indica el tipo de mensaje.
 - **Primero la identidad:** sin `registro` o `login` previo, el servidor rechaza `listar`, `crear_sala`, `unirse`, `perfil_editar` y `perfil_ver` con `"Inicia sesión primero"`. Sin identidad no hay a quién asignarle el progreso.
 - **Una sesión por usuario:** un segundo `login` con un usuario conectado se rechaza; si no, dos ventanas sumarían progreso al mismo perfil. Al desconectarse, el usuario se libera.
 - Una conexión inicia sesión una sola vez (`"Ya iniciaste sesión en esta conexión"`); para cambiar de usuario se reconecta.
-- `hola`/`bienvenido` ya no existen: la identidad viene del perfil.
+- `hola`/`bienvenido` ya no existen: la identidad viene del perfil. Si llega un `hola` (cliente v0.2 o anterior), el servidor responde `error` con `"Versión del juego desactualizada, descarga la última"` en vez de ignorarlo, para que el jugador sepa qué pasa.
 - **Las validaciones las impone el servidor.** El cliente también valida, pero solo por comodidad.
 
 **Paleta** (constante en `server.py` y en `ClienteRed.cs`): `#3FA9F5 #F5D33F #E04FD8 #4FE07A #F5913F #E04F4F #FFFFFF #6A5AE0`. El servidor acepta minúsculas y guarda el color en mayúsculas.
