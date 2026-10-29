@@ -488,6 +488,8 @@ async def manejar(j: Jugador, m: dict):
         try:
             await manejar_perfil(j, t, m)
         except ErrorPerfil as e:
+            # Queda en el log: en la S2-3 no se pudo saber qué intentó la ventana que no entró
+            log.info("Rechazado %s de %s (usuario %r): %s", t, j.id, m.get("usuario", j.usuario), e)
             await j.enviar({"t": "error", "msg": str(e)})
         except Exception:
             # Con la BD caída a mitad de la demo, el jugador recibe un aviso en vez de quedar esperando
@@ -676,8 +678,11 @@ async def manejar_mision(j: Jugador, t: str, m: dict):
 async def guardar_progreso(sala: Sala, mision: Mision, duracion_s: float):
     # Un registro por cada Player presente al completarse; el Wizard guía pero no suma
     for p in [x for x in sala.jugadores.values() if x.rol == "player"]:
+        errores = mision.errores_por.get(p.usuario, 0)
         try:
-            await guardar_mision(p, sala.id, duracion_s, mision.errores_por.get(p.usuario, 0))
+            await guardar_mision(p, sala.id, duracion_s, errores)
+            # Así servidor_logs.sh responde "¿se guardó?" sin abrir la BD
+            log.info("Progreso guardado: %s en %s (%.1f s, %d errores)", p.usuario, sala.id, duracion_s, errores)
         except Exception as e:
             log.warning("No se pudo guardar el progreso de %s: %s", p.usuario, e)
 

@@ -234,6 +234,9 @@ public class MenuLobby : MonoBehaviour
 
         GUILayout.Space(15);
         GUILayout.Label("<b>Progreso</b>", Rico());
+        // En la S2-3 un perfil en 0 parecía un error de guardado, pero era el de quien fue
+        // Wizard en todas las misiones: la regla se dice aquí para que no se confunda.
+        GUILayout.Label("<size=14><color=#aaaaaa>Suma cada Player que está en la sala al completar la misión. El Wizard guía, pero no suma.</color></size>", Rico());
         var pr = p.progreso;
         if (pr == null) return;
         GUILayout.Label($"Misiones completadas: <b>{pr.completadas}</b>", Rico());
@@ -374,6 +377,10 @@ public class MenuLobby : MonoBehaviour
             int tam = estado.completada ? 40 : 28;
             var centro = new GUIStyle(Rico()) { alignment = TextAnchor.MiddleCenter };
             GUI.Label(new Rect(0, Screen.height * .2f, Screen.width, 120), $"<b><size={tam}><color={color}>{estado.mensaje}</color></size></b>", centro);
+            if (estado.completada)
+                GUI.Label(new Rect(0, Screen.height * .2f + 100, Screen.width, 40),
+                          wizard ? "<size=20><color=#c58cff>El Wizard no suma progreso</color></size>"
+                                 : "<size=20><color=#7fff7f>+1 misión en tu perfil (ESC y luego Mi perfil)</color></size>", centro);
         }
 
         // Rechazos del servidor (p. ej. "Otro jugador ya lleva ese objeto")
