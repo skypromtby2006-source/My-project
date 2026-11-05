@@ -132,8 +132,8 @@ Los usuarios finales son estudiantes de secundaria, en su mayoría **menores de 
 - [x] 🤖 Corregir lo reportado, re-build y reporte S2-3 (B1–B7, ver `docs/reportes/fase-s2-3.md`).
 
 ### Fase S2-4 — Entrega v0.3 · 🤖 + 🧑
-- [ ] 🤖 Build de Windows, `QuimicaDemo_Windows_v0.3.zip`, LEEME actualizado (perfiles y progreso) y `abrir_pgadmin.bat` incluido.
-- [ ] 🤖 Crear `entrega/windows/iniciar_servidor_sin_docker.bat`: comprobar Python, crear un venv la primera vez, `pip install -r requirements.txt` y ejecutar `server.py` sin `DATABASE_URL`, mostrando las IPs.
+- [x] 🤖 Build de Windows, `QuimicaDemo_Windows_v0.3.zip`, LEEME actualizado (perfiles y progreso) y `abrir_pgadmin.bat` incluido.
+- [x] 🤖 Crear `entrega/windows/iniciar_servidor_sin_docker.bat`: comprobar Python, crear un venv la primera vez, `pip install -r requirements.txt` y ejecutar `server.py` sin `DATABASE_URL`, mostrando las IPs.
 - [ ] 🧑 Prueba en Windows 11 **solo con `iniciar_servidor_sin_docker.bat`** (decisión del PM del 29/10: Docker Desktop está roto en esa PC, ver `docs/backlog.md`). Sin BD, los perfiles y el progreso viven en memoria y se pierden al cerrar el servidor: es lo esperado.
 - [ ] 🤖 Si es OK: merge a `main`, tag `v0.3-demo`, push y reporte final.
 - [ ] **Jueves 29/10 antes de las 22:00: tag `v0.3-demo`.** Calendario siguiente en `MDs/SPRINT3.md`.
