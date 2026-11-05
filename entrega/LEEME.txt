@@ -1,6 +1,9 @@
 ==========================================================
-  Juego de Química — Demo multijugador v0.2 (Windows)
+  Juego de Química — Demo multijugador v0.3 (Windows)
 ==========================================================
+
+Novedades de la v0.3: perfiles de jugador (usuario, nombre y color) y
+progreso por misiones guardado en el servidor.
 
 Contenido
 ---------
@@ -8,29 +11,48 @@ Contenido
   Servidor\   Servidor Python + PostgreSQL (Docker) y scripts .bat
 
 
-PASO 1 — Instalar Docker Desktop (solo la primera vez)
-------------------------------------------------------
-  1. Descarga Docker Desktop: https://www.docker.com/products/docker-desktop/
-  2. Instálalo y reinicia la PC si lo pide.
-  3. Ábrelo y espera a que diga "Engine running".
+PASO 1 — Elegir cómo correr el servidor
+---------------------------------------
+  A) Con Docker (recomendado): el servidor guarda los perfiles y el progreso
+     en PostgreSQL, y no se pierden al apagarlo. Sigue con el PASO 2.
+  B) Sin Docker (Plan B2): solo hace falta Python. Sirve si Docker Desktop no
+     funciona en esta PC. Los perfiles y el progreso viven en memoria y se
+     pierden al cerrar el servidor. Salta al PASO 2-B.
 
 
-PASO 2 — Levantar el servidor
------------------------------
-  1. Entra a la carpeta Servidor\
-  2. Doble clic en  instalar_servidor.bat
+PASO 2 — Levantar el servidor con Docker
+----------------------------------------
+  1. Solo la primera vez: descarga Docker Desktop
+     (https://www.docker.com/products/docker-desktop/), instálalo, reinicia
+     la PC si lo pide, ábrelo y espera a que diga "Engine running".
+  2. Entra a la carpeta Servidor\
+  3. Doble clic en  instalar_servidor.bat
      - La primera vez tarda unos minutos (descarga Python y PostgreSQL).
      - Al final muestra "SERVIDOR LISTO en el puerto 7777" y las IP de esta PC.
 
   Otros scripts de Servidor\:
      ver_logs.bat          Ver en vivo lo que pasa en el servidor
      ver_eventos_bd.bat    Ver los eventos guardados en PostgreSQL
-     detener_servidor.bat  Apagar el servidor (los datos se conservan)
+     detener_servidor.bat  Apagar el servidor (los perfiles y el progreso se conservan)
      abrir_pgadmin.bat     Ver la BD en el navegador: http://127.0.0.1:5050
                            (admin@example.com / admin123; servidor: host db,
-                           usuario quimica, contraseña quimica123)
+                           usuario quimica, contraseña quimica123).
+                           Tablas: usuarios, misiones_completadas y eventos
      abrir_firewall.bat    Solo si otra PC de la red no puede conectar
                            (clic derecho -> Ejecutar como administrador)
+
+
+PASO 2-B — Levantar el servidor sin Docker (Plan B2)
+----------------------------------------------------
+  1. Solo la primera vez: instala Python 3 desde https://www.python.org/downloads/
+     y marca "Add python.exe to PATH" al instalarlo.
+  2. Entra a la carpeta Servidor\ y haz doble clic en  iniciar_servidor_sin_docker.bat
+     - La primera vez crea el entorno Servidor\.venv e instala las dependencias
+       (necesita internet). Las siguientes veces arranca directo.
+     - Muestra las IP de esta PC y espera a ver "Servidor escuchando".
+     - Si Windows pregunta por el firewall para Python, elige "Permitir".
+  3. Deja esa ventana abierta mientras juegan. Para apagar el servidor,
+     ciérrala o pulsa Ctrl+C.
 
 
 PASO 3 — Entrar a la sala
@@ -38,12 +60,16 @@ PASO 3 — Entrar a la sala
   1. Abre  Juego\QuimicaDemo.exe  dos veces (dos ventanas = dos jugadores).
      Si Windows muestra "Windows protegió su PC": Más información -> Ejecutar de todas formas.
   2. En cada ventana: IP 127.0.0.1, puerto 7777 -> Conectar.
-  3. Jugador A: "Crear sala" -> aparece el código de 4 letras. A será el WIZARD.
-  4. Jugador B: elige la sala de la lista (o escribe el código) -> marca "Listo".
+  3. Perfil (ver la sección "Perfiles y progreso"):
+     - La primera vez: pestaña "Crear perfil" -> usuario, nombre visible y
+       color -> Crear.
+     - Las siguientes: pestaña "Iniciar sesión" -> usuario -> Entrar.
+  4. Jugador A: "Crear sala" -> aparece el código de 4 letras. A será el WIZARD.
+  5. Jugador B: elige la sala de la lista (o escribe el código) -> marca "Listo".
      B será PLAYER.
-  5. Jugador A: "Iniciar" (hacen falta al menos 2 jugadores).
+  6. Jugador A: "Iniciar partida" (hacen falta al menos 2 jugadores).
 
-  Desde otra PC de la misma red: usa la IP que mostró instalar_servidor.bat.
+  Desde otra PC de la misma red: usa la IP que mostró el .bat del servidor.
 
 
 PASO 4 — Jugar: misión "Sintetizar agua"
@@ -67,7 +93,7 @@ PASO 4 — Jugar: misión "Sintetizar agua"
     misión). Hay que llevar exactamente  2 H + 1 O  al REACTOR (el disco
     celeste del otro lado de la mesa).
     - Elemento equivocado: "Reacción inestable", la esfera vuelve a la mesa y
-      suma un error.
+      suma un error al Player que la soltó.
     - Con 2 H + 1 O: "¡Reacción completada! 2 H + 1 O → H2O" para todos.
 
   Cómo se juega: el Wizard señala una esfera y dice "¡esa es hidrógeno!",
@@ -78,9 +104,36 @@ PASO 4 — Jugar: misión "Sintetizar agua"
   "El Wizard salió, la sala se cerró" y todos vuelven a la lista de salas.
 
 
+Perfiles y progreso
+-------------------
+  - Usuario: de 4 a 16 caracteres (letras, números y guion bajo). Es tu
+    identificador y no se puede cambiar. No hay contraseña: es una demo.
+  - Nombre visible y color: se ven en la sala y sobre tu cápsula. Se cambian
+    en "Mi perfil" -> Guardar, y los demás lo ven al momento.
+  - Un usuario solo puede estar conectado en una ventana a la vez.
+  - Progreso: al completar la misión, cada PLAYER de la sala suma +1 misión,
+    su tiempo y sus errores. El WIZARD guía, pero no suma.
+    Se ve en "Mi perfil": misiones completadas, mejor tiempo, errores y las
+    últimas misiones.
+  - Con Docker, el progreso queda guardado en PostgreSQL. Sin Docker (Plan B2),
+    se pierde al cerrar el servidor.
+  - El perfil guarda solo usuario, nombre y color: ningún dato personal.
+
+
 Problemas comunes
 -----------------
-  "No se pudo conectar"   El servidor no está arriba (paso 2) o la IP es incorrecta.
-  Otra PC no conecta      Ejecuta abrir_firewall.bat como administrador.
-                          Ambas PCs deben estar en la misma red.
-  Docker no arranca       Abre Docker Desktop a mano y espera "Engine running".
+  "No se pudo conectar"      El servidor no está arriba (paso 2) o la IP es incorrecta.
+  "El servidor todavía no responde"
+                             El servidor está arrancando: espera unos segundos
+                             y vuelve a pulsar Conectar.
+  "Ese usuario ya tiene una sesión abierta"
+                             Ese usuario ya está en otra ventana. Ciérrala o
+                             usa otro usuario.
+  "Usuario inválido"         De 4 a 16 caracteres: letras, números y guion bajo.
+  Mi progreso desapareció    Con el Plan B2 es lo esperado al cerrar el servidor.
+  Otra PC no conecta         Ejecuta abrir_firewall.bat como administrador.
+                             Ambas PCs deben estar en la misma red.
+  Docker no arranca          Abre Docker Desktop a mano y espera "Engine running".
+                             Si sigue sin funcionar, usa el Plan B2 (PASO 2-B).
+  "Python no está instalado" (Plan B2) Instálalo desde python.org con
+                             "Add python.exe to PATH" marcado.
