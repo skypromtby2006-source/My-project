@@ -125,10 +125,10 @@ Los usuarios finales son estudiantes de secundaria, en su mayoría **menores de 
 - [x] Implementar 2.3. Batch sin `error CS`. Build de Linux, commit y reporte S2-2.
 
 ### Fase S2-3 — Prueba · 🧑 JONA
-- [ ] Crear 2 perfiles de colores distintos. Editar el nombre de uno **estando en la sala** y verificar que el otro lo ve.
-- [ ] Completar la misión: el Player ve +1 en *Mi perfil* y el Wizard no.
-- [ ] Cerrar todo, `servidor_detener.sh` y `servidor_iniciar.sh`, volver a entrar: el progreso sigue ahí.
-- [ ] Intentar entrar dos veces con el mismo usuario: debe rechazarse.
+- [x] Crear 2 perfiles de colores distintos. Editar el nombre de uno **estando en la sala** y verificar que el otro lo ve.
+- [x] Completar la misión: el Player ve +1 en *Mi perfil* y el Wizard no.
+- [x] Cerrar todo, `servidor_detener.sh` y `servidor_iniciar.sh`, volver a entrar: el progreso sigue ahí.
+- [x] Intentar entrar dos veces con el mismo usuario: debe rechazarse.
 - [x] 🤖 Corregir lo reportado, re-build y reporte S2-3 (B1–B7, ver `docs/reportes/fase-s2-3.md`).
 
 ### Fase S2-4 — Entrega v0.3 · 🤖 + 🧑

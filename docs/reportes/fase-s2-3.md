@@ -37,3 +37,8 @@ Necesito de Jona (repetir la prueba S2-3 completa):
 7. Pasarme lo que falle (captura y hora, para buscarlo en `servidor_logs.sh`, que ahora también registra los rechazos).
 
 Commits: `7c98776` (test), `46a960b` (B1), `ee14d05` (B2), `ee7d8f3` (B3), `0fafb1b` (B4), `7fefc42` (B5), `972a137` (B6), `f5aedcc` (B7)
+
+### Cierre (05/11/2026)
+- **Re-prueba de Jona con el protocolo oficial (`docs/pruebas/s2-3.md`): los 7 pasos pasan, sin fallos.** B1–B7 quedan cerrados.
+- Antes de la re-prueba se recompiló el build de Linux: el de las 13:02 del 29/10 no tenía la fuente DejaVu Sans (`8f2800f`, 13:17). Con el build nuevo, `probar_build.sh wizard player sesion` → `TODO OK ✔`.
+- Fase S2-3 cerrada. Sigue la S2-4 (entrega v0.3).
