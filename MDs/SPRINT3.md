@@ -2,19 +2,20 @@
 
 > Brief del PM para Claude Code. Siguen vigentes **todas** las reglas de `CLAUDE.md`.
 > Pedido del docente después de la presentación del 26/10: *"algo más palpable del servidor a nivel web: gestión del servidor, captura de logs y auditoría de los perfiles creados y su progreso"*.
-> **Presentación: lunes 02/11/2026.** Depende del **Sprint 2** (perfiles + progreso), que se hace primero.
+> **Presentación: lunes 09/11/2026** (el 02/11 fue feriado). Depende del **Sprint 2** (perfiles + progreso), que se hace primero.
 
-## 0. Orden de trabajo (replanificado el jueves 29/10)
+## 0. Orden de trabajo (replanificado: el lunes 02/11 fue feriado y no hubo revisión)
+El Sprint 2 ya está cerrado: `v0.3-demo` aprobada en Windows con el Plan B2 y mergeada a `main`. El pedido del docente sigue en pie.
+
 | Día | Trabajo | Corte |
 |---|---|---|
-| Jue 29 | S2-3 + S2-4 → tag `v0.3-demo` | **antes de las 22:00** |
-| Vie 30 | **S3-1** (backend: API, auth, logs, auditoría) | |
-| Sáb 31 | **S3-2 + S3-3** (frontend React completo) | |
-| Dom 01 | **S3-4** (Unity: expulsado/aviso/bloqueado) + **S3-5** (prueba integral + paquete) | **20:00 → `v0.4-demo`** |
-| Lun 02 | 🎤 Presentación | |
+| Vie 06 | **S3-1** (backend: API, auth, logs, auditoría) | |
+| Sáb 07 | **S3-2 + S3-3** (frontend React completo) | **22:00** revisión de las prioridades 🔴 |
+| Dom 08 | **S3-4** (Unity: expulsado/aviso/bloqueado) + **S3-5** (prueba integral + paquete) | **20:00 → `v0.4-demo`** |
+| Lun 09 | 🎤 Presentación | |
 
 **Por qué el Sprint 2 va primero:** sin perfiles no hay nada que auditar.
-**Corte:** si el domingo 01/11 a las 20:00 la v0.4 no está aprobada, se presenta la `v0.3-demo`.
+**Corte:** si el domingo 08/11 a las 20:00 la v0.4 no está aprobada, se presenta la `v0.3-demo`.
 **Prueba en Windows:** solo con `iniciar_servidor_sin_docker.bat` (Docker Desktop está roto en esa PC, ver `docs/backlog.md`).
 
 ## 0.1 Prioridades (implementar en este orden dentro de cada fase)
