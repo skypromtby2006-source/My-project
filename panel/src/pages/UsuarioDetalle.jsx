@@ -10,14 +10,16 @@ export default function UsuarioDetalle() {
   const [d, setD] = useState(null)
   const [error, setError] = useState('')
   const { estado } = useEnVivo()
-  const { expulsar, modal } = useAccionesAdmin()
+  const { expulsar, bloquear, desbloquear, modal } = useAccionesAdmin()
 
   // Se vuelve a pedir cuando el usuario entra o sale del juego: así "En línea" y el
   // botón Expulsar se mantienen al día sin recargar
   const enLinea = estado?.jugadores.some(j => j.usuario === usuario)
+  const [recargas, setRecargas] = useState(0)
   useEffect(() => {
     api(`/usuarios/${encodeURIComponent(usuario)}`).then(setD).catch(e => setError(e.message))
-  }, [usuario, enLinea])
+  }, [usuario, enLinea, recargas])
+  const recargar = () => setRecargas(n => n + 1)
 
   if (error) return <><Link to="/usuarios">← Usuarios</Link><p className="error">{error}</p></>
   if (!d) return <p className="tenue">Cargando…</p>
@@ -34,11 +36,16 @@ export default function UsuarioDetalle() {
       </h1>
       <p className="tenue">Creado {fecha(perfil.creado)} · Último login {fecha(perfil.ultimo_login)}
         {perfil.bloqueado && perfil.motivo_bloqueo && ` · Motivo del bloqueo: ${perfil.motivo_bloqueo}`}</p>
-      {d.conectado && (
-        <button className="peligro" onClick={() => expulsar({ id: d.jugador_id, nombre: perfil.nombre, usuario: perfil.usuario })}>
-          Expulsar del juego
-        </button>
-      )}
+      <div className="botonera">
+        {d.conectado && (
+          <button className="peligro" onClick={() => expulsar({ id: d.jugador_id, nombre: perfil.nombre, usuario: perfil.usuario })}>
+            Expulsar del juego
+          </button>
+        )}
+        {perfil.bloqueado
+          ? <button className="secundario" onClick={() => desbloquear(perfil.usuario, perfil.nombre, recargar)}>🔓 Desbloquear</button>
+          : <button className="peligro" onClick={() => bloquear(perfil.usuario, perfil.nombre, recargar)}>🔒 Bloquear cuenta</button>}
+      </div>
 
       <div className="datos">
         <div className="dato"><div className="titulo">Misiones completadas</div><div className="valor">{resumen.completadas}</div></div>

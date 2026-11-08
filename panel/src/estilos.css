@@ -115,7 +115,14 @@ tr.alerta td { background: rgba(255, 107, 107, .08); }
 .codigo { background: var(--panel-2); border: 1px solid var(--borde); padding: .1rem .45rem; border-radius: 6px; font-weight: 700; letter-spacing: .08em; }
 .mision { display: grid; grid-template-columns: 1fr 1fr; gap: .2rem 1rem; background: var(--fondo); border-radius: 8px; padding: .6rem .8rem; }
 
+/* ---------- aviso global ---------- */
+.aviso-global { margin: 1rem 0; display: flex; flex-direction: column; gap: .5rem; }
+.aviso-global h2 { margin: 0; }
+.aviso-global .fila { display: flex; gap: .6rem; flex-wrap: wrap; }
+.aviso-global .fila input { flex: 1; min-width: 200px; }
+
 /* ---------- usuario ---------- */
+.botonera { display: flex; gap: .6rem; flex-wrap: wrap; }
 .titulo-usuario { margin-top: .6rem; }
 .barra-fila { display: grid; grid-template-columns: 3rem 1fr 5.5rem; align-items: center; gap: .6rem; margin: .35rem 0; }
 .barra { background: var(--fondo); border-radius: 99px; height: .8rem; overflow: hidden; }

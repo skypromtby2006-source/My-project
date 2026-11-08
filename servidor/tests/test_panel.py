@@ -14,7 +14,8 @@ from conftest import ADMIN, CLAVE
 RUTAS_PROTEGIDAS = [
     ("get", "/api/estado"), ("get", "/api/salas"), ("post", "/api/salas/ABCD/cerrar"),
     ("post", "/api/jugadores/abc/expulsar"), ("get", "/api/usuarios"), ("get", "/api/usuarios/ana"),
-    ("get", "/api/logs"), ("get", "/api/auditoria"),
+    ("get", "/api/logs"), ("get", "/api/auditoria"), ("get", "/api/estadisticas"), ("post", "/api/aviso"),
+    ("post", "/api/usuarios/ana/bloquear"), ("post", "/api/usuarios/ana/desbloquear"),
 ]
 
 
@@ -50,7 +51,7 @@ def test_sin_contrasena_el_panel_queda_deshabilitado(monkeypatch):
 # ----------------------------------------------------------------- 2. sin token
 @pytest.mark.parametrize("metodo,ruta", RUTAS_PROTEGIDAS)
 async def test_sin_token_da_401(api, metodo, ruta):
-    kw = {"json": {"motivo": "x"}} if metodo == "post" else {}
+    kw = {"json": {"motivo": "x", "mensaje": "x"}} if metodo == "post" else {}
     assert (await getattr(api, metodo)(ruta, **kw)).status_code == 401
     r = await getattr(api, metodo)(ruta, headers={"Authorization": "Bearer inventado"}, **kw)
     assert r.status_code == 401
@@ -268,3 +269,48 @@ async def test_estadisticas_con_pandas(api, h, servidor_juego, bot):
     assert e["por_dia"][0]["completadas"] == 1
     assert e["usuarios_con_mas_errores"] == [{"usuario": "beto_test", "errores": 1}]
     assert (await api.get("/api/estadisticas")).status_code == 401
+
+
+# ----------------------------------------------------------------- 🟡 5. aviso global
+async def test_aviso_llega_a_todos_los_clientes(api, h, servidor_juego, bot):
+    a = await bot(servidor_juego, "ana_test")
+    b = await bot(servidor_juego, "beto_test")
+    r = await api.post("/api/aviso", headers=h, json={"mensaje": "  El servidor se reinicia en 5 minutos "})
+    assert r.status_code == 200 and r.json()["conexiones"] == 2
+    for x in (a, b):
+        assert (await x.rec("aviso"))["msg"] == "El servidor se reinicia en 5 minutos"
+    assert (await api.post("/api/aviso", headers=h, json={"mensaje": "x" * 201})).status_code == 422
+    assert (await api.post("/api/aviso", headers=h, json={"mensaje": "   "})).status_code == 422
+    assert (await api.post("/api/aviso", json={"mensaje": "hola"})).status_code == 401
+    assert (await acciones(api, h))[0] == "aviso"
+
+
+# ----------------------------------------------------------------- 🟡 4. bloquear
+async def test_bloquear_impide_el_login_y_expulsa_si_esta_conectado(api, h, servidor_juego, bot):
+    a = await bot(servidor_juego, "ana_test")
+    r = await api.post("/api/usuarios/ANA_TEST/bloquear", headers=h, json={"motivo": "Insultos en el chat"})
+    assert r.status_code == 200
+    assert (await a.rec("expulsado"))["motivo"] == "Cuenta bloqueada: Insultos en el chat"
+    assert await a.cerrado()
+    await asyncio.sleep(0.05)
+
+    async def intentar_login():
+        r2, w2 = await asyncio.open_connection("127.0.0.1", servidor_juego)
+        w2.write(b'{"t":"login","usuario":"ana_test"}\n')
+        m = json.loads(await asyncio.wait_for(r2.readline(), 3))
+        w2.close()
+        return m
+    m = await intentar_login()
+    assert m == {"t": "error", "msg": "Cuenta bloqueada: Insultos en el chat"}
+    lista = (await api.get("/api/usuarios", headers=h)).json()["usuarios"]
+    assert lista[0]["bloqueado"] is True
+    d = (await api.get("/api/usuarios/ana_test", headers=h)).json()
+    assert d["perfil"]["bloqueado"] and d["perfil"]["motivo_bloqueo"] == "Insultos en el chat"
+
+    assert (await api.post("/api/usuarios/ana_test/desbloquear", headers=h, json={"motivo": "Pidió disculpas"})).status_code == 200
+    assert (await intentar_login())["t"] == "perfil"
+    filas = (await api.get("/api/auditoria", headers=h)).json()["acciones"]
+    assert [f["accion"] for f in filas[:2]] == ["desbloquear", "bloquear"]
+    assert filas[1]["detalle"] == {"motivo": "Insultos en el chat", "expulsado": True}
+    assert (await api.post("/api/usuarios/nadie/bloquear", headers=h, json={"motivo": "x"})).status_code == 404
+    assert (await api.post("/api/usuarios/ana_test/bloquear", headers=h, json={"motivo": ""})).status_code == 422

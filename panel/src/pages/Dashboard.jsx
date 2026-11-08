@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { api } from '../api.js'
 import { Color, Rol, useAccionesAdmin } from '../componentes/acciones.jsx'
 import { duracion } from '../util.js'
 import { useEnVivo } from '../vivo.jsx'
@@ -13,9 +15,40 @@ function Dato({ titulo, valor, detalle }) {
   )
 }
 
+// Aviso global: aparece como banner amarillo durante 6 s en todos los juegos conectados
+function AvisoGlobal({ avisar }) {
+  const [texto, setTexto] = useState('')
+  const [error, setError] = useState('')
+  const [enviando, setEnviando] = useState(false)
+
+  async function enviar(e) {
+    e.preventDefault()
+    setEnviando(true)
+    try {
+      const r = await api('/aviso', { method: 'POST', body: { mensaje: texto.trim() } })
+      avisar(`Aviso enviado a ${r.conexiones} juego(s)`)
+      setTexto('')
+      setError('')
+    } catch (err) { setError(err.message) }
+    setEnviando(false)
+  }
+
+  return (
+    <form className="tarjeta aviso-global" onSubmit={enviar}>
+      <h2>📢 Mensaje global</h2>
+      <div className="fila">
+        <input maxLength={200} value={texto} onChange={e => setTexto(e.target.value)}
+               placeholder="Ej.: En 5 minutos termina la clase" />
+        <button type="submit" disabled={enviando || !texto.trim()}>Enviar a todos</button>
+      </div>
+      <div className="tenue">{texto.length}/200 · Aparece arriba en todos los juegos durante 6 s{error && <span className="error"> · {error}</span>}</div>
+    </form>
+  )
+}
+
 export default function Dashboard() {
   const { estado } = useEnVivo()
-  const { expulsar, modal } = useAccionesAdmin()
+  const { expulsar, avisar, modal } = useAccionesAdmin()
   if (!estado) return <p className="tenue">Conectando con el servidor…</p>
 
   return (
@@ -30,6 +63,8 @@ export default function Dashboard() {
         <Dato titulo="Base de datos" valor={estado.modo_bd ? 'PostgreSQL' : 'Sin BD'}
               detalle={estado.modo_bd ? 'Todo se guarda' : 'Solo en memoria'} />
       </div>
+
+      <AvisoGlobal avisar={avisar} />
 
       <h2>Usuarios activos ahora</h2>
       {estado.jugadores.length === 0 ? <p className="tenue vacio">No hay nadie conectado.</p> : (

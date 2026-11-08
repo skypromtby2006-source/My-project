@@ -371,12 +371,16 @@ def clave_admin():
 
 
 async def escenario_panel(s):
-    """S3-4: el juego real muestra el motivo cuando el admin cierra la sala y cuando lo expulsa."""
+    """S3-4: el juego real reacciona a las acciones del panel: aviso global, cierre de sala,
+    expulsión y cuenta bloqueada, mostrando siempre el texto que mandó el admin."""
     u = f"pp_{s}"  # prefijos propios: "progreso" ya usa p_ y w_ en la misma corrida
     p = Build("panel_p", ["conectar", f"registro|{u}|Pepa|#4FE07A", "esperar_pantalla|Salas",
                           "unirse_codigo|codigo_panel", "listo", "esperar_pantalla|Partida", "marca|jugando",
+                          "esperar_aviso_global|Hola desde el panel", "reporte|aviso",
                           "esperar_aviso|Fin de la clase", "reporte|cerrada",
-                          "esperar_aviso|Prueba automática", "reporte|expulsado", "fin"])
+                          "esperar_aviso|Prueba automática", "reporte|expulsado",
+                          "esperar_senal|bloqueado", "conectar", f"login|{u}", "esperar_aviso|Cuenta bloqueada",
+                          "reporte|bloqueado", "fin"])
     w = await Bot.nuevo(f"pw_{s}", "Wiz")
     try:
         sala = await w.crear_sala("codigo_panel")
@@ -385,6 +389,11 @@ async def escenario_panel(s):
         await p.esperar("MARCA jugando")
         datos = {"usuario": "admin", "contrasena": clave_admin()}
         token = (await asyncio.to_thread(panel, "/login", datos))["token"]
+        print("El admin manda un aviso global en plena partida")
+        await asyncio.to_thread(panel, "/aviso", {"mensaje": "Hola desde el panel"}, token)
+        r = await p.esperar("REPORTE aviso")
+        comprobar(r["pantalla"] == "Partida" and "Hola desde el panel" in (r["aviso_global"] or ""),
+                  "el aviso global aparece en la partida", r)
         print("El admin cierra la sala desde el panel")
         await asyncio.to_thread(panel, f"/salas/{sala}/cerrar", {"motivo": "Fin de la clase"}, token)
         r = await p.esperar("REPORTE cerrada")
@@ -398,6 +407,12 @@ async def escenario_panel(s):
         comprobar(r["pantalla"] == "Conexion", "con expulsado el juego vuelve a la pantalla de conexión", r)
         comprobar("expulsado" in (r["aviso"] or "") and "Prueba automática" in (r["aviso"] or ""),
                   "y muestra el motivo (no 'Se perdió la conexión')", r)
+        print("El admin bloquea la cuenta y el jugador intenta volver a entrar")
+        await asyncio.to_thread(panel, f"/usuarios/{u}/bloquear", {"motivo": "Prueba de bloqueo"}, token)
+        senal("bloqueado")
+        r = await p.esperar("REPORTE bloqueado")
+        comprobar(r["pantalla"] == "Perfil" and "Cuenta bloqueada: Prueba de bloqueo" in (r["aviso"] or ""),
+                  "una cuenta bloqueada no puede iniciar sesión y ve el motivo", r)
         await p.esperar("FIN")
     finally:
         w.cerrar()

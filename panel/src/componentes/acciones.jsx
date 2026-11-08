@@ -32,6 +32,28 @@ export function useAccionesAdmin() {
     },
   })
 
+  const bloquear = (usuario, nombre, despues) => setPedido({
+    titulo: `Bloquear a ${nombre} (${usuario})`,
+    descripcion: 'No podrá iniciar sesión en el juego. Si está conectado, se lo expulsa ahora.',
+    boton: 'Bloquear',
+    hacer: async motivo => {
+      await api(`/usuarios/${usuario}/bloquear`, { method: 'POST', body: { motivo } })
+      avisar(`${nombre} quedó bloqueado`)
+      despues?.()
+    },
+  })
+
+  const desbloquear = (usuario, nombre, despues) => setPedido({
+    titulo: `Desbloquear a ${nombre} (${usuario})`,
+    descripcion: 'Podrá volver a iniciar sesión en el juego.',
+    boton: 'Desbloquear',
+    hacer: async motivo => {
+      await api(`/usuarios/${usuario}/desbloquear`, { method: 'POST', body: { motivo } })
+      avisar(`${nombre} fue desbloqueado`)
+      despues?.()
+    },
+  })
+
   const modal = (
     <>
       {aviso && <div className="toast">✔ {aviso}</div>}
@@ -42,7 +64,7 @@ export function useAccionesAdmin() {
       )}
     </>
   )
-  return { expulsar, cerrarSala, modal }
+  return { expulsar, cerrarSala, bloquear, desbloquear, avisar, modal }
 }
 
 export function Color({ color }) {

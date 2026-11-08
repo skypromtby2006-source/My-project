@@ -110,6 +110,7 @@ public class PruebaAutomatica : MonoBehaviour
             case "esperar": yield return new WaitForSeconds(float.Parse(Arg(1), System.Globalization.CultureInfo.InvariantCulture)); break;
             case "esperar_pantalla": yield return Esperar(() => menu.PantallaActual == Arg(1), "pantalla " + Arg(1)); break;
             case "esperar_aviso": yield return Esperar(() => (menu.Aviso ?? "").Contains(Arg(1)), "aviso '" + Arg(1) + "'"); break;
+            case "esperar_aviso_global": yield return Esperar(() => menu.AvisoGlobal.Contains(Arg(1)), "aviso global '" + Arg(1) + "'"); break;
             case "esperar_jugadores":
                 yield return Esperar(() => Red.SalaActual != null && Red.SalaActual.cantidad == int.Parse(Arg(1)), Arg(1) + " jugadores");
                 break;
@@ -171,7 +172,7 @@ public class PruebaAutomatica : MonoBehaviour
 
     [Serializable] class EstadoPrueba
     {
-        public string pantalla, aviso, mi_id, usuario, nombre, sala, host, rol, estado_sala;
+        public string pantalla, aviso, aviso_global, mi_id, usuario, nombre, sala, host, rol, estado_sala;
         public bool escena, local;
         public float local_x, local_z;
         public List<string> jugadores_sala = new List<string>();
@@ -184,7 +185,7 @@ public class PruebaAutomatica : MonoBehaviour
     {
         var e = new EstadoPrueba
         {
-            pantalla = menu.PantallaActual, aviso = menu.Aviso, mi_id = Red.MiId,
+            pantalla = menu.PantallaActual, aviso = menu.Aviso, aviso_global = menu.AvisoGlobal, mi_id = Red.MiId,
             usuario = Red.MiPerfil?.usuario, nombre = Red.MiPerfil?.nombre,
             sala = Red.SalaActual?.id, host = Red.SalaActual?.host, estado_sala = Red.SalaActual?.estado,
             rol = Red.SalaActual != null ? Red.MiRol : null,

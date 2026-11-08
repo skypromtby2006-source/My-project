@@ -342,7 +342,8 @@ async def buscar_usuario(usuario: str) -> dict | None:
     if db is None:
         return usuarios_mem.get(usuario)
     async with db.acquire() as c:
-        fila = await c.fetchrow("SELECT id, usuario, nombre, color FROM usuarios WHERE usuario = $1", usuario)
+        fila = await c.fetchrow("SELECT id, usuario, nombre, color, bloqueado, motivo_bloqueo "
+                                "FROM usuarios WHERE usuario = $1", usuario)
     return dict(fila) if fila else None
 
 
@@ -458,6 +459,9 @@ async def manejar_perfil(j: Jugador, t: str, m: dict):
             datos = await buscar_usuario(usuario)
             if datos is None:
                 raise ErrorPerfil("Usuario no encontrado")
+            if datos.get("bloqueado"):
+                # Lo bloqueó un admin desde el panel; el motivo se muestra en la ventana de perfil
+                raise ErrorPerfil(f"Cuenta bloqueada: {datos.get('motivo_bloqueo') or 'sin motivo'}")
             await marcar_login(usuario)
         # Se vuelve a mirar después de los await: otra conexión pudo entrar con
         # el mismo usuario mientras se consultaba la BD.
@@ -537,6 +541,33 @@ async def expulsar(j: Jugador, motivo: str):
         j.writer.close()
     except Exception:
         pass
+
+
+async def aviso_global(texto: str) -> int:
+    """Mensaje del panel a todos los conectados (con o sin sesión). Devuelve a cuántos llegó."""
+    conectados = list(jugadores.values())
+    await asyncio.gather(*(j.enviar({"t": "aviso", "msg": texto}) for j in conectados))
+    log.info("Aviso global a %d conexiones: %s", len(conectados), texto)
+    await registrar("aviso", {"msg": texto, "conexiones": len(conectados)})
+    return len(conectados)
+
+
+async def cambiar_bloqueo(usuario: str, bloqueado: bool, motivo: str) -> bool:
+    """Devuelve False si el usuario no existe. Si se bloquea y está conectado, se lo expulsa."""
+    if db is None:
+        if usuario not in usuarios_mem:
+            return False
+        usuarios_mem[usuario].update(bloqueado=bloqueado, motivo_bloqueo=motivo if bloqueado else None)
+    else:
+        async with db.acquire() as c:
+            r = await c.execute("UPDATE usuarios SET bloqueado = $2, motivo_bloqueo = $3 WHERE usuario = $1",
+                                usuario, bloqueado, motivo if bloqueado else None)
+        if r == "UPDATE 0":
+            return False
+    log.warning("Usuario %s %s: %s", usuario, "bloqueado" if bloqueado else "desbloqueado", motivo)
+    if bloqueado and usuario in sesiones:
+        await expulsar(sesiones[usuario], f"Cuenta bloqueada: {motivo}")
+    return True
 
 
 async def entrar_a_sala(j: Jugador, sala: Sala):

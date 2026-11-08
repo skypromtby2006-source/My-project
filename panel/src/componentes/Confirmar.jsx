@@ -1,4 +1,4 @@
-// Confirmación de acciones destructivas (expulsar, cerrar sala). El motivo es
+// Confirmación de acciones de admin (expulsar, cerrar sala, bloquear). El motivo es
 // obligatorio porque es lo que hace útil a la auditoría (MDs/SPRINT3.md §2.6).
 import { useState } from 'react'
 
@@ -20,7 +20,7 @@ export default function Confirmar({ titulo, descripcion, boton = 'Confirmar', al
         <h2>{titulo}</h2>
         {descripcion && <p className="tenue">{descripcion}</p>}
         <label>
-          Motivo <span className="tenue">(obligatorio, lo verá el jugador)</span>
+          Motivo <span className="tenue">(obligatorio, queda en la auditoría)</span>
           <input autoFocus maxLength={200} value={motivo} onChange={e => { setMotivo(e.target.value); setError('') }}
                  placeholder="Ej.: fin de la clase" />
         </label>

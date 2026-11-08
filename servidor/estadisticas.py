@@ -19,7 +19,10 @@ async def cargar(juego) -> tuple[pd.DataFrame, pd.DataFrame]:
     else:
         async with juego.db.acquire() as c:
             errores = [{**json.loads(f["detalle"]), "fecha": f["fecha"]} for f in await c.fetch(
-                "SELECT detalle, fecha FROM eventos WHERE tipo = 'reaccion_fallida'")]
+                # Solo usuarios que existen: hay eventos de pruebas viejas con un usuario que
+                # ya no está, y su enlace en el panel llevaría a una página vacía
+                "SELECT detalle, fecha FROM eventos WHERE tipo = 'reaccion_fallida' "
+                "AND detalle->>'usuario' IN (SELECT usuario FROM usuarios)")]
             misiones = [dict(f) for f in await c.fetch(
                 "SELECT u.usuario, m.mision, m.duracion_s, m.errores, m.fecha "
                 "FROM misiones_completadas m JOIN usuarios u ON u.id = m.usuario_id")]

@@ -33,6 +33,10 @@ class Login(BaseModel):
     contrasena: str = Field(max_length=200)
 
 
+class Aviso(BaseModel):
+    mensaje: str = Field(min_length=1, max_length=200)
+
+
 class ConMotivo(BaseModel):
     # Motivo obligatorio: es lo que hace útil a la auditoría (§2.6)
     motivo: str = Field(min_length=1, max_length=200)
@@ -300,6 +304,34 @@ def crear_app(juego, autenticador, registro) -> FastAPI:
                                {"motivo": motivo, "nombre": j.nombre, "sala": j.sala.id if j.sala else None},
                                ip_de(request))
         return {"ok": True}
+
+    @app.post("/api/aviso")
+    async def aviso(datos: Aviso, request: Request, admin: str = Depends(admin_actual)):
+        texto = datos.mensaje.strip()
+        if not texto:
+            raise HTTPException(422, "El aviso está vacío")
+        n = await juego.aviso_global(texto)
+        await auditoria.anotar(admin, "aviso", "todos", {"mensaje": texto, "conexiones": n}, ip_de(request))
+        return {"ok": True, "conexiones": n}
+
+    async def bloqueo(usuario: str, bloquear: bool, datos: ConMotivo, request: Request, admin: str):
+        usuario = usuario.strip().lower()
+        conectado = usuario in juego.sesiones
+        if not await juego.cambiar_bloqueo(usuario, bloquear, datos.motivo.strip()):
+            raise HTTPException(404, f"No existe el usuario {usuario}")
+        detalle = {"motivo": datos.motivo.strip()}
+        if bloquear:
+            detalle["expulsado"] = conectado
+        await auditoria.anotar(admin, "bloquear" if bloquear else "desbloquear", usuario, detalle, ip_de(request))
+        return {"ok": True}
+
+    @app.post("/api/usuarios/{usuario}/bloquear")
+    async def bloquear(usuario: str, datos: ConMotivo, request: Request, admin: str = Depends(admin_actual)):
+        return await bloqueo(usuario, True, datos, request, admin)
+
+    @app.post("/api/usuarios/{usuario}/desbloquear")
+    async def desbloquear(usuario: str, datos: ConMotivo, request: Request, admin: str = Depends(admin_actual)):
+        return await bloqueo(usuario, False, datos, request, admin)
 
     # ---------------------------------------------------------- auditoría de perfiles
     @app.get("/api/usuarios")
