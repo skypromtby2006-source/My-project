@@ -63,6 +63,19 @@ public class MenuLobby : MonoBehaviour
                 aviso = m.msg ?? "";
                 tAviso = Time.time;
             }
+            if (m.t == "sala_cerrada")
+            {
+                // Lo cerró un administrador desde el panel: sigue conectado, vuelve al lobby
+                pantalla = Pantalla.Salas; listo = false; Red.ListarSalas();
+                aviso = m.motivo ?? "Un administrador cerró la sala";
+                tAviso = Time.time;
+            }
+            if (m.t == "expulsado")
+            {
+                pantalla = Pantalla.Conexion; listo = false;
+                aviso = "Fuiste expulsado por un administrador. Motivo: " + (m.motivo ?? "sin motivo");
+                tAviso = Time.time;
+            }
             if (m.t == "inicio") { pantalla = Pantalla.Partida; tMensaje = -99; erroresPrevios = 0; }
             if (m.t == "perfil") AlRecibirPerfil(m.perfil);
             if (m.t == "estado")
