@@ -9,7 +9,25 @@ using System.Threading;
 using UnityEngine;
 
 // ---------- Modelos que llegan del servidor (JsonUtility ignora los campos que no vienen) ----------
-[Serializable] public class InfoJugador { public string id; public string nombre; public bool listo; public string rol; }
+[Serializable] public class InfoJugador { public string id; public string nombre; public string color; public bool listo; public string rol; }
+
+// Perfil: llega en la raíz del mensaje "perfil" (ver docs/protocolo.md)
+[Serializable] public class EntradaHistorial { public string fecha; public float duracion_s; public int errores; }
+
+[Serializable] public class InfoProgreso
+{
+    public int completadas;
+    public float mejor_tiempo_s;   // 0 = todavía sin misiones
+    public int errores_totales;
+    public List<EntradaHistorial> historial = new List<EntradaHistorial>();
+}
+
+[Serializable] public class InfoPerfil
+{
+    public string id;              // id de esta conexión, el mismo que usa la sala
+    public string usuario, nombre, color;
+    public InfoProgreso progreso;
+}
 
 [Serializable] public class InfoSala
 {
@@ -48,6 +66,8 @@ using UnityEngine;
     public EstadoMision estado;
 }
 
+[Serializable] public class Aparicion { public string id; public float x, y, z; }
+
 [Serializable] public class Mensaje
 {
     public string t;            // tipo de mensaje
@@ -55,6 +75,7 @@ using UnityEngine;
     public InfoSala sala;
     public List<InfoSala> lista;
     public InfoMision mision;
+    public List<Aparicion> apariciones = new List<Aparicion>();   // en "inicio": dónde aparece cada uno
     public float x, y, z, ry;
 
     // "obj" llega como objeto en el mensaje "obj" y como texto en "senal". JsonUtility
@@ -63,6 +84,7 @@ using UnityEngine;
     [NonSerialized] public InfoObjeto objeto;      // mensaje "obj"
     [NonSerialized] public string objId, por;      // mensaje "senal"
     [NonSerialized] public EstadoMision estado;    // mensaje "estado"
+    [NonSerialized] public InfoPerfil perfil;      // mensaje "perfil"
 }
 
 [Serializable] class MsgObj { public InfoObjeto obj; }
@@ -73,13 +95,18 @@ public class ClienteRed : MonoBehaviour
 {
     public static ClienteRed I { get; private set; }
 
+    // La misma paleta que server.py. Aquí solo sirve para dibujar el selector:
+    // el servidor es el que rechaza un color que no esté en la lista.
+    public static readonly string[] Paleta = { "#3FA9F5", "#F5D33F", "#E04FD8", "#4FE07A", "#F5913F", "#E04F4F", "#FFFFFF", "#6A5AE0" };
+
     public bool Conectado => cliente != null && cliente.Connected;
     public string MiId { get; private set; }
+    public InfoPerfil MiPerfil { get; private set; }   // null = sin sesión
     public InfoSala SalaActual { get; private set; }
     public InfoMision MisionActual { get; private set; }
     public EstadoMision EstadoActual => MisionActual?.estado;
 
-    // El rol no se guarda: se lee de la sala cada vez, así refleja el cambio de anfitrión
+    // El rol no se guarda: se lee de la sala cada vez, así la única fuente es el servidor
     public string MiRol => SalaActual?.jugadores.Find(j => j.id == MiId)?.rol ?? "player";
     public bool SoyWizard => MiRol == "wizard";
 
@@ -107,7 +134,7 @@ public class ClienteRed : MonoBehaviour
         CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
     }
 
-    public bool Conectar(string ip, int puerto, string nombre)
+    public bool Conectar(string ip, int puerto)
     {
         try
         {
@@ -121,16 +148,31 @@ public class ClienteRed : MonoBehaviour
             escritor = new StreamWriter(flujo, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
             var lector = new StreamReader(flujo, Encoding.UTF8);
 
+            // Antes de pasar al login se confirma que el servidor responde. Con Docker, el
+            // proxy del puerto 7777 acepta la conexión aunque el servidor todavía esté
+            // arrancando y la corta enseguida: el jugador entraba a "Perfil" y lo sacaba
+            // "Se perdió la conexión" (bug B4 de la S2-3).
+            cliente.ReceiveTimeout = 3000;
+            escritor.WriteLine("{\"t\":\"ping\"}");
+            string primera;
+            try { primera = lector.ReadLine(); } catch (IOException) { primera = null; }
+            if (primera == null) throw new Exception("el servidor todavía no responde; espera unos segundos y vuelve a intentar");
+            cliente.ReceiveTimeout = 0;
+            if (!primera.Contains("\"pong\"")) entrada.Enqueue(primera);
+
             cayoConexion = false;
+            var propio = cliente;
             hiloLectura = new Thread(() =>
             {
                 try { string linea; while ((linea = lector.ReadLine()) != null) entrada.Enqueue(linea); }
                 catch { /* socket cerrado */ }
-                cayoConexion = true;
+                // Solo avisa si sigue siendo la conexión actual: el hilo de una conexión
+                // cerrada con "Desconectar" puede terminar después de reconectar, y si no
+                // se comprobara, cerraría la conexión nueva.
+                if (cliente == propio) cayoConexion = true;
             }) { IsBackground = true };
             hiloLectura.Start();
-
-            Enviar($"{{\"t\":\"hola\",\"nombre\":{Json(nombre)}}}");
+            // Ya no se manda "hola": la identidad llega con login o registro
             return true;
         }
         catch (Exception e)
@@ -140,6 +182,14 @@ public class ClienteRed : MonoBehaviour
             return false;
         }
     }
+
+    // ---------- Perfil (el servidor responde siempre con "perfil" o "error") ----------
+    public void Registrar(string usuario, string nombre, string color) =>
+        Enviar("{\"t\":\"registro\",\"usuario\":" + Json(usuario) + ",\"nombre\":" + Json(nombre) + ",\"color\":" + Json(color) + "}");
+    public void Login(string usuario) => Enviar("{\"t\":\"login\",\"usuario\":" + Json(usuario) + "}");
+    public void EditarPerfil(string nombre, string color) =>
+        Enviar("{\"t\":\"perfil_editar\",\"nombre\":" + Json(nombre) + ",\"color\":" + Json(color) + "}");
+    public void VerPerfil() => Enviar("{\"t\":\"perfil_ver\"}");
 
     // ---------- Acciones de lobby ----------
     public void ListarSalas() => Enviar("{\"t\":\"listar\"}");
@@ -176,7 +226,12 @@ public class ClienteRed : MonoBehaviour
 
             switch (m.t)
             {
-                case "bienvenido": MiId = m.id; break;
+                case "perfil":
+                    // Los campos del perfil están en la raíz del mensaje y coinciden con InfoPerfil
+                    m.perfil = JsonUtility.FromJson<InfoPerfil>(linea);
+                    MiPerfil = m.perfil;
+                    MiId = m.perfil.id;
+                    break;
                 case "sala": SalaActual = m.sala; break;
                 case "inicio": SalaActual = m.sala; MisionActual = m.mision; break;
                 case "fuera": SalaActual = null; MisionActual = null; break;
@@ -216,6 +271,7 @@ public class ClienteRed : MonoBehaviour
         SalaActual = null;
         MisionActual = null;
         MiId = null;
+        MiPerfil = null;
     }
 
     void OnApplicationQuit() => Cerrar();

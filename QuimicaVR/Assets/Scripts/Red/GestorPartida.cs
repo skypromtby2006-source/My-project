@@ -13,6 +13,7 @@ public class GestorPartida : MonoBehaviour
     public float duracionSenal = 2f;
 
     GameObject escena, jugadorLocal, raizMision;
+    string salaDeLaEscena;   // la sala de la partida dibujada; null = no hay partida
     readonly Dictionary<string, Remoto> remotos = new Dictionary<string, Remoto>();
     readonly Dictionary<string, Esfera> esferas = new Dictionary<string, Esfera>();
     InfoMision mision;
@@ -20,6 +21,12 @@ public class GestorPartida : MonoBehaviour
     Camera cam;
 
     class Remoto { public GameObject go; public Vector3 destino; public float rotY; }
+
+    // Solo lectura, para el reporte de PruebaAutomatica: es lo que el jugador ve en pantalla
+    public bool HayEscena => escena != null;
+    public Vector3? PosicionLocal => jugadorLocal != null ? jugadorLocal.transform.position : (Vector3?)null;
+    public IEnumerable<string> IdsRemotos => remotos.Keys;
+    public Vector3 DestinoRemoto(string id) => remotos[id].destino;
 
     class Esfera
     {
@@ -30,8 +37,6 @@ public class GestorPartida : MonoBehaviour
         public TextMesh etiqueta;
         public float senalHasta;
     }
-
-    static readonly Color[] colores = { Color.cyan, Color.yellow, Color.magenta, Color.green, new Color(1f, .5f, 0f), Color.red, Color.white, Color.blue };
 
     // El color va por posición en la mesa (o1..o6) y NO por elemento: como el servidor
     // baraja los elementos en cada misión, el color no delata qué es cada esfera.
@@ -50,9 +55,13 @@ public class GestorPartida : MonoBehaviour
         {
             switch (m.t)
             {
-                case "inicio": Comenzar(m.sala, m.mision); break;
+                case "inicio": Comenzar(m.sala, m.mision, m.apariciones); break;
                 case "pos": MoverRemoto(m); break;
                 case "salio": Quitar(m.id); break;
+                // Al volver al lobby se borra la partida. Antes quedaba viva detrás del menú
+                // y el siguiente "inicio" la tomaba por un reinicio: no se creaban las
+                // cápsulas de los jugadores nuevos (bug B1 de la S2-3).
+                case "fuera": Terminar(); break;
                 case "obj": if (m.objeto != null && esferas.TryGetValue(m.objeto.id, out var e)) e.info = m.objeto; break;
                 case "senal": if (m.objId != null && esferas.TryGetValue(m.objId, out var s)) s.senalHasta = Time.time + duracionSenal; break;
             }
@@ -60,15 +69,17 @@ public class GestorPartida : MonoBehaviour
         red.AlDesconectar += Terminar;
     }
 
-    void Comenzar(InfoSala sala, InfoMision nueva)
+    void Comenzar(InfoSala sala, InfoMision nueva, List<Aparicion> apariciones)
     {
         // "inicio" llega también cuando el wizard reinicia: en ese caso solo se rehace la
-        // misión y los jugadores siguen donde están.
-        bool enCurso = escena != null && jugadorLocal != null;
+        // misión y los jugadores siguen donde están. Se reconoce por el código de sala y no
+        // por "ya hay escena": una escena de otra partida no es un reinicio.
+        bool enCurso = escena != null && jugadorLocal != null && salaDeLaEscena == sala.id;
         if (!enCurso)
         {
             Terminar();
             escena = new GameObject("Escena");
+            salaDeLaEscena = sala.id;
 
             var suelo = GameObject.CreatePrimitive(PrimitiveType.Plane);
             suelo.transform.SetParent(escena.transform);
@@ -78,11 +89,18 @@ public class GestorPartida : MonoBehaviour
             for (int i = 0; i < sala.jugadores.Count; i++)
             {
                 var j = sala.jugadores[i];
-                var inicio = new Vector3(-6 + i * 3f, 1, -5);
-                var go = Crear(j.nombre, colores[i % colores.Length], inicio);
+                // El punto lo decide el servidor, distinto para cada uno (B5 de la S2-3). El
+                // cálculo por índice queda solo para un servidor viejo que no lo mande.
+                var a = apariciones?.Find(x => x.id == j.id);
+                var inicio = a != null ? new Vector3(a.x, a.y, a.z) : new Vector3(-6 + i * 3f, 1, -5);
+                // El color es el del perfil, así cada uno se reconoce igual en el lobby y en la partida
+                if (!ColorUtility.TryParseHtmlString(j.color, out var color)) color = Color.white;
+                var go = Crear(j.nombre, color, inicio);
                 if (j.id == ClienteRed.I.MiId) jugadorLocal = go;
                 else remotos[j.id] = new Remoto { go = go, destino = inicio };
             }
+            if (jugadorLocal == null)
+                Debug.LogWarning($"[Quimica] Mi id {ClienteRed.I.MiId} no está en la sala {sala.id}: no hay jugador local");
         }
 
         if (nueva == null) { Debug.LogWarning("[Quimica] 'inicio' sin misión: ¿servidor viejo?"); return; }
@@ -199,11 +217,16 @@ public class GestorPartida : MonoBehaviour
         go.GetComponent<Renderer>().sharedMaterial = new Material(mat) { color = color };
     }
 
+    // DejaVu Sans (Resources/Fuentes, licencia en Assets/Licencias) para los textos 3D y el
+    // menú. Por qué: la fuente integrada de Unity no dibuja "_" (no se veía en los nombres de
+    // usuario) ni "₂". Se eligió DejaVu y no Noto Sans porque Noto no tiene "→", que usa la receta.
     static Font fuenteCache;
-    static Font FuenteBase()
+    public static Font FuenteBase()
     {
         if (fuenteCache != null) return fuenteCache;
-        // Unity 2022.2+ usa LegacyRuntime.ttf; versiones anteriores, Arial.ttf
+        fuenteCache = Resources.Load<Font>("Fuentes/DejaVuSans");
+        if (fuenteCache != null) return fuenteCache;
+        // Respaldo: Unity 2022.2+ usa LegacyRuntime.ttf; versiones anteriores, Arial.ttf
         try { fuenteCache = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); } catch { }
         if (fuenteCache == null) try { fuenteCache = Resources.GetBuiltinResource<Font>("Arial.ttf"); } catch { }
         return fuenteCache;
@@ -335,7 +358,8 @@ public class GestorPartida : MonoBehaviour
             else
                 e.go.transform.position = Vector3.Lerp(e.go.transform.position, new Vector3(e.info.x, e.info.y, e.info.z), 15 * Time.deltaTime);
 
-            // El rol puede cambiar a mitad de partida (si el anfitrión se va), por eso se revisa cada frame
+            // El rol no cambia a mitad de partida (si el Wizard se va, la sala se cierra), pero
+            // leerlo cada frame es barato y evita guardar una copia que se pueda desincronizar
             e.etiqueta.text = soyWizard ? e.info.elemento : "?";
 
             // Señal del wizard: pulso de escala y brillo. Lo ven todos, también los players:
@@ -351,6 +375,7 @@ public class GestorPartida : MonoBehaviour
     {
         if (escena != null) Destroy(escena);
         escena = null;
+        salaDeLaEscena = null;
         raizMision = null;
         jugadorLocal = null;
         mision = null;
