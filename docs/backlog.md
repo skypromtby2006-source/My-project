@@ -16,3 +16,8 @@ Se anotan aquí para no perderlas y se priorizan en el siguiente sprint.
 | 27/10/2026 | Guardado local estilo Steam Cloud | SPRINT2.md | — |
 | 27/10/2026 | Borrar cuenta | SPRINT2.md | También sirve para el derecho de supresión de datos |
 | 27/10/2026 | Avatares 3D | SPRINT2.md | Hoy el avatar es la cápsula con el color del perfil |
+| 08/11/2026 | Paquete de Windows v0.4 (venv + `pip install`, `panel/dist` compilado y LEEME) | Replanificación del PM | Fuera del alcance del domingo. Sin él, el zip v0.3 sigue con el servidor de la v0.3 (sin panel) |
+| 08/11/2026 | Exportar logs a CSV (`/api/logs.csv`) · gráfico de conexiones de los últimos 30 min · histórico paginado de logs en el panel | SPRINT3.md 🟢 | La API `/api/logs` ya pagina y filtra por nivel y texto; falta la pantalla. La página Logs hoy muestra las últimas 2000 líneas en vivo |
+| 08/11/2026 | Gráficos en Estadísticas (Recharts) | SPRINT3.md | El domingo se hicieron como tablas simples (prioridad 🟡) |
+| 08/11/2026 | Límite de 5 logins por minuto por IP detrás de Docker | S3-1 | Con Docker, todas las conexiones llegan con la IP de la red de Docker (`172.18.0.1`): el límite se comparte entre todos los equipos y la auditoría no ve la IP real. Sin Docker (Plan B2) sí se ve la IP real. Se arregla con `network_mode: host` o un proxy que mande `X-Forwarded-For` |
+| 08/11/2026 | Varios admins con roles · HTTPS con certificado · editar perfiles desde el panel · notificaciones por correo | SPRINT3.md | Fuera de alcance del Sprint 3 desde el brief |

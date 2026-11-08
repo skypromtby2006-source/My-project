@@ -18,6 +18,8 @@ El Sprint 2 ya está cerrado: `v0.3-demo` aprobada en Windows con el Plan B2 y m
 **Corte:** si el domingo 08/11 a las 20:00 la v0.4 no está aprobada, se presenta la `v0.3-demo`.
 **Prueba en Windows:** solo con `iniciar_servidor_sin_docker.bat` (Docker Desktop está roto en esa PC, ver `docs/backlog.md`).
 
+**Replanificación del PM (domingo 08/11):** hoy solo lo 🔴; S3-4 mínima (motivo de `expulsado` y `sala_cerrada`); 🟡 solo con lo 🔴 terminado y testeado (estadísticas en tabla → aviso → bloquear). Fuera de hoy: paquete Windows v0.4, CSV, gráfico de conexiones e histórico paginado. **Estado:** 🔴 completo y 🟡 completo, ver `docs/reportes/fase-s3.md`.
+
 ## 0.1 Prioridades (implementar en este orden dentro de cada fase)
 | Nivel | Qué | Por qué |
 |---|---|---|
@@ -151,32 +153,32 @@ auditoria_admin (id SERIAL PK, admin TEXT, accion TEXT,   -- expulsar|cerrar_sal
 ## 3. Plan de trabajo
 
 ### Fase S3-1 — Backend · 🤖
-- [ ] `git checkout -b sprint-3` desde `main` (ya con la v0.3).
-- [ ] Implementar 2.1 a 2.5 en el servidor. Ajustar el Dockerfile multi-etapa y el compose. Crear `.env.example` y agregar `.env` al `.gitignore`.
-- [ ] Tests con `pytest` (`servidor/tests/`):
+- [x] `git checkout -b sprint-3` desde `main` (ya con la v0.3).
+- [x] Implementar 2.1 a 2.5 en el servidor. *(08/11: todo salvo `/api/logs.csv`, fuera de alcance)* Ajustar el Dockerfile multi-etapa y el compose. Crear `.env.example` y agregar `.env` al `.gitignore`.
+- [x] Tests con `pytest` (`servidor/tests/`):
   1. Login OK; contraseña mala → 401; el sexto intento en un minuto → 429.
   2. Sin token → 401 en todas las rutas protegidas.
   3. Expulsar: un cliente TCP de prueba recibe `expulsado` y se cierra su conexión.
   4. Bloquear: el login del usuario bloqueado falla; si estaba conectado, se lo expulsa.
   5. Aviso: todos los clientes TCP lo reciben.
   6. Cada acción deja su fila en `auditoria_admin`.
-  7. `logs.csv` respeta los filtros.
-- [ ] **Criterio de terminado:** `pytest` en verde, `probar_servidor.sh` sigue en `TODO OK ✔` (el juego no se rompió) y `curl` a `/api/estado` con token responde.
-- [ ] Commit, push y reporte S3-1.
+  7. `logs.csv` respeta los filtros. *(sin hacer: el CSV quedó fuera de alcance el 08/11)*
+- [x] **Criterio de terminado:** `pytest` en verde, `probar_servidor.sh` sigue en `TODO OK ✔` (el juego no se rompió) y `curl` a `/api/estado` con token responde.
+- [x] Commit, push y reporte S3-1.
 
 ### Fase S3-2 — Frontend base · 🤖
-- [ ] `panel/` con Vite + React + Router + Recharts. Páginas Login, Dashboard (con el gráfico) y Salas (en vivo, con expulsar y cerrar).
-- [ ] `npm run build` sin errores. La imagen Docker sirve el panel en `http://localhost:8000`.
-- [ ] `scripts/panel_dev.sh`: modo desarrollo con Vite (proxy de `/api` → `:8000`) para iterar rápido.
-- [ ] Commit y reporte S3-2.
+- [x] `panel/` con Vite + React + Router *(sin Recharts: el gráfico de conexiones quedó fuera de alcance el 08/11)*. Páginas Login, Dashboard (con el gráfico) y Salas (en vivo, con expulsar y cerrar).
+- [x] `npm run build` sin errores. La imagen Docker sirve el panel en `http://localhost:8000`.
+- [x] `scripts/panel_dev.sh`: modo desarrollo con Vite (proxy de `/api` → `:8000`) para iterar rápido.
+- [x] Commit y reporte S3-2.
 
 ### Fase S3-3 — Frontend: auditoría · 🤖
-- [ ] Páginas Usuarios, UsuarioDetalle, Logs (en vivo + histórico + CSV), Auditoría y Estadísticas.
-- [ ] Commit y reporte S3-3.
+- [x] Páginas Usuarios, UsuarioDetalle, Logs, Auditoría y Estadísticas. *(08/11: Logs solo en vivo, sin histórico paginado ni CSV; Estadísticas en tablas, sin gráficos)*
+- [x] Commit y reporte S3-3.
 
 ### Fase S3-4 — Cliente Unity · 🤖
-- [ ] Manejar `expulsado`, `sala_cerrada` y `aviso`, y el error de cuenta bloqueada (tabla 2.5). Batch sin `error CS` + build de Linux.
-- [ ] Commit y reporte S3-4.
+- [x] Manejar `expulsado`, `sala_cerrada` y `aviso`, y el error de cuenta bloqueada (tabla 2.5). Batch sin `error CS` + build de Linux.
+- [x] Commit y reporte S3-4.
 
 ### Fase S3-5 — Prueba integral + entrega · 🧑 + 🤖
 - [ ] 🧑 Con el panel abierto en el navegador y 2 juegos en Arch:

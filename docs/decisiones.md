@@ -23,3 +23,22 @@ Tomado de la explicación de la demo original (`_base/LEEME_demo_anterior.md`, e
 **`InvariantCulture` al enviar posiciones:** en una PC con Windows en español, `1.5f.ToString()` da `"1,5"`, lo que rompe el JSON. Es un bug típico en Bolivia/Latinoamérica.
 
 **Materiales en `Resources/` (agregado en el sprint 0):** los objetos de la partida se crean por código, así que ninguna escena referencia el shader URP/Lit y Unity lo eliminaba del build (todo se veía magenta). Lo que está en `Resources/` entra siempre al build junto con su shader.
+
+## Sprint 3 — Panel web
+
+**La API recibe el módulo del juego como parámetro** (`crear_app(juego, ...)`) en vez de hacer `import server`. Al ejecutar `python server.py`, el módulo se llama `__main__`, y un `import server` cargaría una **segunda copia** con sus propias salas vacías: el panel mostraría todo en cero.
+
+**El panel no puede tumbar el juego.** Si faltan dependencias (`fastapi`, `jwt`), si no hay `ADMIN_PASSWORD` o si el puerto 8000 está ocupado, el servidor lo dice en el log y el juego sigue funcionando. uvicorn hace `sys.exit(1)` cuando el puerto está ocupado; se atrapa para que no cierre también el servidor del juego.
+
+**`expulsado` cierra la conexión, pero la limpieza la hace el mismo `finally` de siempre** (salir de la sala, liberar la sesión). Así no hay dos caminos de limpieza que puedan quedar distintos.
+
+**`sala_cerrada` es un mensaje distinto de `fuera`**, para que el juego distinga "el Wizard se fue" de "lo cerró un administrador".
+
+**HashRouter en el panel** (`/#/salas`): FastAPI sirve el panel como archivos estáticos, sin tener que redirigir cada ruta a `index.html`.
+
+**Una sola conexión WebSocket para todo el panel**, compartida por las páginas. Cambiar de página no corta el flujo de logs. Se reconecta sola, con espera creciente, si el servidor se reinicia.
+
+**Los tests del panel corren sin BD** (`servidor/tests`, modo Plan B2) y no necesitan Docker. El camino con PostgreSQL se prueba con curl y con `probar_build.sh panel` contra el servidor real.
+
+**Dependencias de tests aparte** (`servidor/requirements-dev.txt`): pytest y httpx no van en la imagen de Docker ni en el venv del Plan B2.
+

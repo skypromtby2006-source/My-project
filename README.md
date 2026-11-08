@@ -15,6 +15,7 @@ Los jugadores se conectan por IP, crean una sala o se unen a una (desde la lista
 3. **Base de datos**: PostgreSQL 16 guarda un registro de eventos (conexiones, salas, partidas). Es opcional: si cae, el servidor sigue funcionando en memoria.
 4. **Cliente Unity** (`QuimicaVR/Assets/Scripts/Red/`): `ClienteRed` maneja el socket en un hilo aparte, `MenuLobby` dibuja el menú con IMGUI y `GestorPartida` crea el escenario y sincroniza las posiciones 15 veces por segundo, con interpolación.
 5. **Docker Compose** levanta el servidor y la BD juntos, así la demo corre igual en cualquier PC sin instalar Python ni PostgreSQL.
+6. **Panel web** (Sprint 3): FastAPI en el **mismo proceso** que el juego, puerto **8000**, más un panel React (`panel/`) que se compila dentro de la imagen de Docker. Muestra el estado en vivo, las salas (con expulsar y cerrar), los usuarios con su progreso, los logs en vivo, la auditoría de acciones de admin y estadísticas calculadas con pandas. Ver *Panel web* más abajo.
 
 ## Linux (desarrollo)
 
@@ -29,6 +30,7 @@ Requisitos: Docker con Compose (sin `sudo`), Python 3 y Unity `6000.3.27f1` con 
 | `scripts/pgadmin.sh` | Levanta pgAdmin en http://127.0.0.1:5050 para revisar la BD (ver abajo) |
 | `scripts/probar_servidor.sh` | Prueba de 2 jugadores simulados, sin Unity → `TODO OK ✔` |
 | `scripts/probar_build.sh [escenario…]` | Prueba el **build real** de Linux sin ventana contra el servidor de Docker (Wizard/Player entre partidas, salidas de sala, sesión única, reconexión, progreso) → `TODO OK ✔`. Los escenarios `reinicio` y `progreso` reinician el servidor |
+| `scripts/panel_dev.sh` | Panel en modo desarrollo (Vite en http://localhost:5173, recarga al guardar), contra el servidor en :8000 |
 | `scripts/jugar_linux.sh [N]` | Abre N instancias del build de Linux (logs en `logs/`) |
 | `scripts/empaquetar.sh [versión]` | Genera `dist/QuimicaDemo_Windows_<versión>.zip` |
 
@@ -52,6 +54,18 @@ scripts/servidor_iniciar.sh
 scripts/jugar_linux.sh 2      # A crea la sala, B se une y marca Listo, A inicia → WASD
 scripts/servidor_eventos.sh
 ```
+
+## Panel web de administración
+
+1. Copiar `.env.example` como `.env` en la raíz del repo y poner `ADMIN_PASSWORD` y `JWT_SECRET`. El `.env` **no se sube a git**. Sin `ADMIN_PASSWORD`, el panel arranca deshabilitado y lo avisa en el log: nunca se usa una contraseña por defecto.
+2. `scripts/servidor_iniciar.sh` y abrir **http://localhost:8000**, o `http://<IP-de-la-PC>:8000` desde otro equipo o un celular de la misma red.
+3. Tests de la API (sin Docker):
+   ```bash
+   python -m venv .venv && .venv/bin/pip install -r servidor/requirements-dev.txt
+   cd servidor && ../.venv/bin/python -m pytest
+   ```
+
+El juego no depende del panel: si faltan las dependencias, la contraseña o el puerto 8000, el servidor del juego arranca igual. Las rutas de la API están en `MDs/SPRINT3.md` §2.4 y el guion de prueba en `docs/pruebas/s3-integral.md`.
 
 ## pgAdmin (opcional)
 
