@@ -8,6 +8,7 @@ import Layout from './componentes/Layout.jsx'
 import { ProveedorEnVivo } from './vivo.jsx'
 import Auditoria from './pages/Auditoria.jsx'
 import Dashboard from './pages/Dashboard.jsx'
+import Estadisticas from './pages/Estadisticas.jsx'
 import Login from './pages/Login.jsx'
 import Logs from './pages/Logs.jsx'
 import Salas from './pages/Salas.jsx'
@@ -43,6 +44,7 @@ function App() {
             <Route path="usuarios/:usuario" element={<UsuarioDetalle />} />
             <Route path="logs" element={<Logs />} />
             <Route path="auditoria" element={<Auditoria />} />
+            <Route path="estadisticas" element={<Estadisticas />} />
             <Route path="*" element={<p>Página no encontrada</p>} />
           </Route>
         </Routes>

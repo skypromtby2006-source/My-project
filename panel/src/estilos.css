@@ -82,6 +82,7 @@ main { flex: 1; padding: 1.5rem 2rem 3rem; min-width: 0; }
 .dato .valor { font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .tarjeta { background: var(--panel); border: 1px solid var(--borde); border-radius: 12px; padding: 1rem 1.2rem; }
 .tarjeta h2 { margin-top: 0; }
+.chico-titulo { font-size: .95rem; font-weight: 400; }
 .contador { background: var(--panel-2); border: 1px solid var(--borde); border-radius: 99px; padding: 0 .6rem; font-size: 1rem; }
 .columnas { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
 

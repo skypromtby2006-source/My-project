@@ -313,6 +313,14 @@ def crear_app(juego, autenticador, registro) -> FastAPI:
             raise HTTPException(404, f"No existe el usuario {usuario}")
         return datos
 
+    @app.get("/api/estadisticas")
+    async def ver_estadisticas(admin: str = Depends(admin_actual)):
+        try:
+            import estadisticas  # pandas es pesado: solo se carga si alguien abre la página
+        except ImportError:
+            raise HTTPException(503, "Falta pandas en el servidor: instala servidor/requirements.txt")
+        return await estadisticas.obtener(juego)
+
     # ---------------------------------------------------------- logs y auditoría de admin
     @app.get("/api/logs")
     async def logs(nivel: str = "", buscar: str = "", pagina: int = 1, admin: str = Depends(admin_actual)):

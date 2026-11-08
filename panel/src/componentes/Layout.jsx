@@ -8,6 +8,7 @@ const SECCIONES = [
   ['/usuarios', 'Usuarios', '👥'],
   ['/logs', 'Logs', '📜'],
   ['/auditoria', 'Auditoría', '🛡️'],
+  ['/estadisticas', 'Estadísticas', '📈'],
 ]
 
 export default function Layout({ admin, alSalir }) {

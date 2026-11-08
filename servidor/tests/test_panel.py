@@ -250,3 +250,21 @@ async def test_websocket_empuja_logs_y_estado(app, token, servidor_juego, bot):
         admin_api.ESTADO_CADA_S = 2.0
         web.should_exit = True
         await tarea
+
+
+# ----------------------------------------------------------------- 🟡 estadísticas
+async def test_estadisticas_con_pandas(api, h, servidor_juego, bot):
+    vacio = (await api.get("/api/estadisticas", headers=h)).json()
+    assert vacio["resumen"]["errores_totales"] == 0 and vacio["por_dia"] == []
+    a = await bot(servidor_juego, "ana_test")
+    b = await bot(servidor_juego, "beto_test")
+    await jugar_mision(a, b)
+    e = (await api.get("/api/estadisticas", headers=h)).json()
+    assert e["resumen"] == {"errores_totales": 1, "misiones_completadas": 1,
+                            "usuarios_con_errores": 1, "usuarios_con_misiones": 1}
+    assert e["errores_por_elemento"] == [{"elemento": "Na", "veces": 1, "porcentaje": 100.0, "usuarios": 1}]
+    assert {(c["llevo"], c["faltaba"]) for c in e["confusiones"]} == {("Na", "H"), ("Na", "O")}
+    assert e["por_mision"][0]["mision"] == "agua" and e["por_mision"][0]["completadas"] == 1
+    assert e["por_dia"][0]["completadas"] == 1
+    assert e["usuarios_con_mas_errores"] == [{"usuario": "beto_test", "errores": 1}]
+    assert (await api.get("/api/estadisticas")).status_code == 401
