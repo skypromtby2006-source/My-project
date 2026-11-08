@@ -23,6 +23,7 @@ El campo `t` indica el tipo de mensaje.
 | `senalar` (solo wizard) | `senal` |
 | `reiniciar` (solo wizard) | `inicio` con la misión nueva |
 | `ping` | `pong` |
+| — (acciones del panel web) | `expulsado`, `sala_cerrada` |
 
 ## Sesión
 
@@ -71,6 +72,8 @@ El campo `t` indica el tipo de mensaje.
 | `estado` | `reactor` (símbolos), `errores`, `completada`, `mensaje` | Después de cada `soltar` |
 | `error` | `msg` | Petición rechazada (sala llena, no existe, no eres anfitrión, JSON inválido…) |
 | `pong` | — | Respuesta a `ping` |
+| `expulsado` | `motivo` | **Sprint 3.** Un administrador te expulsó desde el panel web. Justo después el servidor cierra la conexión. El juego vuelve a la pantalla de conexión con el motivo en rojo. Puede volver a entrar (expulsar no es bloquear) |
+| `sala_cerrada` | `motivo` | **Sprint 3.** Un administrador cerró la sala desde el panel. Llega a todos sus jugadores, que siguen conectados y con sesión, y vuelven al lobby con el motivo. Es distinto de `fuera` para que el juego distinga "el Wizard se fue" de "lo cerró un administrador" |
 
 ### Objeto *sala*
 

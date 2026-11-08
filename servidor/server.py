@@ -25,6 +25,7 @@ Servidor -> cliente:
 Detalle completo en docs/protocolo.md
 """
 import asyncio
+import collections
 import json
 import logging
 import math
@@ -32,6 +33,7 @@ import os
 import random
 import re
 import string
+import sys
 import time
 import uuid
 from datetime import datetime, timezone
@@ -82,6 +84,10 @@ def validar_nombre_color(m: dict) -> tuple[str, str]:
 usuarios_mem: dict[str, dict] = {}
 misiones_mem: list[dict] = []
 errores_mem: dict[str, int] = {}
+# Sin BD, los eventos quedan aquí (los últimos 5000) para que el panel pueda
+# mostrar los errores frecuentes de cada usuario también en el Plan B2.
+eventos_mem: collections.deque = collections.deque(maxlen=5000)
+INICIO = time.time()  # para el uptime del panel
 
 
 # ----------------------------------------------------------------- modelos
@@ -96,6 +102,7 @@ class Jugador:
         self.sala = None
         self.listo = False
         self.ip = (writer.get_extra_info("peername") or ("?",))[0]
+        self.desde = time.time()  # hora de conexión, para el panel
         # Última posición conocida: si se desconecta llevando un objeto, ahí se cae
         self.x = self.y = self.z = 0.0
 
@@ -287,7 +294,27 @@ async def iniciar_bd():
                         errores INT NOT NULL,
                         fecha TIMESTAMPTZ DEFAULT now()
                     );
-                    CREATE INDEX IF NOT EXISTS misiones_por_usuario ON misiones_completadas (usuario_id)""")
+                    CREATE INDEX IF NOT EXISTS misiones_por_usuario ON misiones_completadas (usuario_id);
+                    -- Sprint 3: panel web
+                    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS bloqueado BOOLEAN DEFAULT false;
+                    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS motivo_bloqueo TEXT;
+                    CREATE TABLE IF NOT EXISTS logs (
+                        id SERIAL PRIMARY KEY,
+                        nivel TEXT NOT NULL,
+                        mensaje TEXT NOT NULL,
+                        fecha TIMESTAMPTZ DEFAULT now()
+                    );
+                    CREATE INDEX IF NOT EXISTS logs_por_fecha ON logs (fecha);
+                    CREATE TABLE IF NOT EXISTS auditoria_admin (
+                        id SERIAL PRIMARY KEY,
+                        admin TEXT NOT NULL,
+                        accion TEXT NOT NULL,
+                        objetivo TEXT,
+                        detalle JSONB,
+                        ip TEXT,
+                        fecha TIMESTAMPTZ DEFAULT now()
+                    );
+                    CREATE INDEX IF NOT EXISTS eventos_por_tipo ON eventos (tipo)""")
             log.info("Conectado a PostgreSQL")
             return
         except Exception as e:
@@ -299,6 +326,7 @@ async def iniciar_bd():
 
 async def registrar(tipo: str, detalle: dict):
     if db is None:
+        eventos_mem.append({"tipo": tipo, "detalle": detalle, "fecha": datetime.now(timezone.utc)})
         return
     try:
         async with db.acquire() as c:
@@ -323,7 +351,9 @@ async def crear_usuario(usuario: str, nombre: str, color: str) -> dict | None:
     if db is None:
         if usuario in usuarios_mem:
             return None
-        usuarios_mem[usuario] = {"id": None, "usuario": usuario, "nombre": nombre, "color": color}
+        ahora = datetime.now(timezone.utc)
+        usuarios_mem[usuario] = {"id": None, "usuario": usuario, "nombre": nombre, "color": color,
+                                 "creado": ahora, "ultimo_login": ahora}
         return usuarios_mem[usuario]
     # ON CONFLICT en vez de consultar antes: si dos clientes registran el mismo
     # usuario a la vez, la restricción UNIQUE decide sin carrera.
@@ -336,7 +366,9 @@ async def crear_usuario(usuario: str, nombre: str, color: str) -> dict | None:
 
 
 async def marcar_login(usuario: str):
-    if db is not None:
+    if db is None:
+        usuarios_mem[usuario]["ultimo_login"] = datetime.now(timezone.utc)
+    else:
         async with db.acquire() as c:
             await c.execute("UPDATE usuarios SET ultimo_login = now() WHERE usuario = $1", usuario)
 
@@ -475,17 +507,36 @@ async def salir_de_sala(j: Jugador):
             await difundir(sala, {"t": "obj", "obj": o.info()})
 
 
-async def cerrar_sala(sala: Sala, motivo: str):
+async def cerrar_sala(sala: Sala, motivo: str, por_admin: bool = False):
     salas.pop(sala.id, None)
     quedan = list(sala.jugadores.values())
     sala.jugadores.clear()
     for x in quedan:
         x.sala = None
         x.listo = False
-    # "fuera" con msg: el cliente vuelve al lobby y muestra el motivo
-    await asyncio.gather(*(x.enviar({"t": "fuera", "msg": motivo}) for x in quedan))
+    # "fuera" con msg: el cliente vuelve al lobby y muestra el motivo.
+    # Si la cierra el admin va "sala_cerrada", para que el juego pueda distinguir
+    # "el Wizard se fue" de "un administrador cerró la sala".
+    aviso = {"t": "sala_cerrada", "motivo": motivo} if por_admin else {"t": "fuera", "msg": motivo}
+    await asyncio.gather(*(x.enviar(aviso) for x in quedan))
     log.info("Sala %s cerrada: %s", sala.id, motivo)
     await registrar("sala_cerrada", {"sala": sala.id, "motivo": motivo, "expulsados": len(quedan)})
+
+
+async def expulsar(j: Jugador, motivo: str):
+    """Expulsión desde el panel: avisa al cliente y cierra su conexión.
+
+    La limpieza (salir de la sala, liberar la sesión) la hace el finally de cliente()
+    cuando el readline devuelve vacío, igual que en una desconexión normal: así no hay
+    un segundo camino de limpieza que pueda quedar distinto.
+    """
+    log.warning("Jugador %s (%s) expulsado: %s", j.id, j.usuario or j.nombre, motivo)
+    await j.enviar({"t": "expulsado", "motivo": motivo})
+    await registrar("expulsado", {"id": j.id, "usuario": j.usuario, "motivo": motivo})
+    try:
+        j.writer.close()
+    except Exception:
+        pass
 
 
 async def entrar_a_sala(j: Jugador, sala: Sala):
@@ -742,12 +793,65 @@ async def cliente(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
             pass
 
 
+async def iniciar_panel() -> list:
+    """Arranca el panel web en el mismo event loop. Devuelve las tareas a esperar.
+
+    Va en el mismo proceso que el juego porque el panel necesita tocar salas y
+    jugadores en memoria (ver MDs/SPRINT3.md §2.1). Si algo falla aquí, el juego
+    sigue funcionando igual: el panel es un extra y no puede tumbar la partida.
+    """
+    try:
+        import registro_logs
+        registro = registro_logs.registro
+        import auth
+        auth.cargar_env()
+        autenticador = auth.Autenticador.desde_entorno()
+        if autenticador is None:
+            return []
+        import admin_api
+        import uvicorn
+    except ImportError as e:
+        log.warning("Panel web DESHABILITADO: falta una dependencia (%s). "
+                    "Instala servidor/requirements.txt para usarlo", e)
+        return []
+    if db is not None:
+        await registro.conectar_bd(db)
+    app = admin_api.crear_app(sys.modules[__name__], autenticador, registro)
+    puerto = int(os.getenv("PUERTO_PANEL", "8000"))
+    # access_log apagado: cada pedido del panel llenaría el log que el propio panel muestra
+    config = uvicorn.Config(app, host=HOST, port=puerto, log_level="warning", access_log=False)
+    servidor_web = uvicorn.Server(config)
+
+    async def correr():
+        try:
+            await servidor_web.serve()
+        except (SystemExit, Exception) as e:
+            # uvicorn hace sys.exit(1) si el puerto está ocupado: se atrapa para que
+            # el servidor del juego no se cierre con él.
+            log.error("El panel web no pudo arrancar en el puerto %d (%r); el juego sigue funcionando", puerto, e)
+            await asyncio.Event().wait()  # no se termina: si no, main() cerraría el juego
+    log.info("Panel web en http://%s:%d", HOST, puerto)
+    return [asyncio.create_task(correr()), asyncio.create_task(registro.guardar_en_lotes())]
+
+
 async def main():
+    try:
+        # Se engancha antes de conectar a la BD para que el panel también muestre los logs del arranque
+        import registro_logs
+        registro_logs.instalar()
+    except ImportError:
+        pass
     await iniciar_bd()
     servidor = await asyncio.start_server(cliente, HOST, PUERTO)
     log.info("Servidor escuchando en %s:%d", HOST, PUERTO)
+    tareas = await iniciar_panel()
     async with servidor:
-        await servidor.serve_forever()
+        juego = asyncio.create_task(servidor.serve_forever())
+        # Si uvicorn termina (Ctrl+C o SIGTERM de docker stop: él atrapa la señal),
+        # se cierra también el juego.
+        hechas, _ = await asyncio.wait([juego, *tareas], return_when=asyncio.FIRST_COMPLETED)
+        for t in [juego, *tareas]:
+            t.cancel()
 
 
 if __name__ == "__main__":
