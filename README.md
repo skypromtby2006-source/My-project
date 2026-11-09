@@ -34,6 +34,7 @@ Requisitos: Docker con Compose (sin `sudo`), Python 3 y Unity `6000.3.27f1` con 
 | `scripts/jugar_linux.sh [N]` | Abre N instancias del build de Linux (logs en `logs/`) |
 | `scripts/probar_tests.sh` | pytest del servidor contra memoria, SQLite y PostgreSQL (levanta un PostgreSQL descartable) |
 | `scripts/empaquetar.sh [versión] [--sin-exe]` | Genera `dist/QuimicaDemo_Windows_<versión>.zip` (juego + servidor local `.exe` + servidor dedicado Docker). Toma el `.exe` de `dist/QuimicaServidor/` |
+| `scripts/publicar_release.sh <tag>` | Entrega en un comando: baja el `.exe` del Release del tag, `empaquetar.sh`, `probar_paquete.sh docker` y sube el zip completo al Release |
 | `scripts/probar_paquete.sh <zip> [docker\|exe]` | Prueba de humo: descomprime el zip en una carpeta temporal, arranca cada servidor **desde ahí**, corre `probar_cliente` y entra al panel → `PAQUETE OK ✔` |
 
 Los scripts funcionan desde cualquier carpeta del repo.
@@ -91,6 +92,13 @@ Descomprime `QuimicaDemo_Windows_<versión>.zip` y sigue su `LEEME.txt`, que son
 Si un antivirus bloquea el `.exe` (falso positivo frecuente de PyInstaller), el **plan C** es `ServidorDedicado\iniciar_servidor_sin_docker.bat`: el mismo servidor con el Python de la PC, datos en SQLite. El zip va en Documentos o el Escritorio: en una carpeta sin permiso de escritura (Archivos de programa) el `.exe` avisa y no arranca.
 
 `ServidorDedicado\` trae la opción con **Docker + PostgreSQL** para un aula entera (`instalar_servidor.bat`, pgAdmin, logs). Ver `docs/decisiones.md` (Sprint 4) para cuándo usar cada uno.
+
+**Publicar una versión (el domingo):**
+```bash
+git tag v0.5-demo && git push origin v0.5-demo   # Actions construye y prueba el .exe y crea el Release
+scripts/publicar_release.sh v0.5-demo            # cuando el run termine: arma, prueba y sube el zip completo
+```
+Para probar el paso del Release sin publicar nada: `gh workflow run servidor-exe.yml --ref sprint-4 -f borrador=true` (crea un *draft*, que no crea tag; se borra con `gh release delete <nombre> --yes`).
 
 **De dónde sale el `.exe`:** GitHub Actions lo construye en Windows (`.github/workflows/servidor-exe.yml`) en cada tag `v*` y en cada push a `sprint-4` que toque `servidor/` o `panel/`, y le corre `probar_paquete.sh`. Para armar el zip de entrega:
 ```bash
