@@ -68,7 +68,11 @@ class Dialecto:
 
 
 # --------------------------------------------------------------------- backends
-# Interfaz común: execute / executemany / fetchrow (dict|None) / fetch (list[dict]) / fetchval.
+# Interfaz común: execute / executemany / fetchrow (dict|None) / fetch (list[dict]) /
+# fetch_grande (list[dict], para resultados enormes) / fetchval.
+LOTE = 5000
+
+
 class _BDPostgres:
     def __init__(self, pool):
         self.pool = pool
@@ -93,6 +97,20 @@ class _BDPostgres:
     async def fetchval(self, sql, *a):
         async with self.pool.acquire() as c:
             return await c.fetchval(sql, *a)
+
+    async def fetch_grande(self, sql, *a):
+        """Como fetch, pero por lotes con un cursor. asyncpg decodifica las filas DENTRO
+        del event loop: 500 000 filas de una vez lo frenan ~0,4 s (lo midió
+        test_concurrencia.py). De a LOTE filas, cada tramo es corto y entre tramo y
+        tramo el loop atiende a los jugadores."""
+        filas = []
+        async with self.pool.acquire() as c:
+            async with c.transaction():   # los cursores de PostgreSQL viven en una transacción
+                cursor = await c.cursor(sql, *a)
+                while bloque := await cursor.fetch(LOTE):
+                    filas.extend(dict(x) for x in bloque)
+                    await asyncio.sleep(0)
+        return filas
 
     async def cerrar(self):
         await self.pool.close()
@@ -146,6 +164,10 @@ class _BDSQLite:
             fila = self.con.execute(sql, a).fetchone()
             return fila[0] if fila is not None else None
         return await self._en_hilo(go)
+
+    async def fetch_grande(self, sql, *a):
+        # Ya corre entero en un hilo: no hace falta partirlo
+        return await self.fetch(sql, *a)
 
     async def cerrar(self):
         await self._en_hilo(self.con.close)
@@ -398,12 +420,12 @@ class Repositorio:
         """(errores, misiones) para el análisis con pandas. `detalle` va SIN decodificar
         (texto JSON): con muchos eventos el json.loads es caro, y estadisticas.py lo hace
         en un hilo junto con pandas para no frenar el event loop."""
-        errores = await self.bd.fetch(
+        errores = await self.bd.fetch_grande(
             # Solo usuarios que existen: hay eventos de pruebas viejas con un usuario que
             # ya no está, y su enlace en el panel llevaría a una página vacía
             "SELECT detalle, fecha FROM eventos WHERE tipo = 'reaccion_fallida' "
             "AND detalle->>'usuario' IN (SELECT usuario FROM usuarios)")
-        misiones = await self.bd.fetch(
+        misiones = await self.bd.fetch_grande(
             "SELECT u.usuario, m.mision, m.duracion_s, m.errores, m.fecha "
             "FROM misiones_completadas m JOIN usuarios u ON u.id = m.usuario_id")
         return errores, misiones
