@@ -29,7 +29,7 @@ def test_el_json_carga_y_tiene_las_5_salas_y_los_dos_lados():
 def test_masa_molar_de_secundaria():
     assert nivel.masa_molar({"Na": 1, "Cl": 1}) == 58.5
     assert nivel.masa_molar({"H": 1, "Cl": 1}) == 36.5
-    assert nivel.masa_molar({"C": 1, "O": 2}) == 44.0
+    assert nivel.masa_molar({"N": 2}) == 28.0
 
 
 def test_el_sorteo_siempre_da_enteros_en_las_5_salas():
@@ -57,7 +57,7 @@ def test_el_encadenamiento_cierra_entre_salas():
         assert s[2]["agua_mol"] == s[1]["produce"]["agua_mol"]        # agua 1 -> 2
         assert s[3]["naoh_mol"] == s[2]["produce"]["naoh_mol"]        # NaOH 2 -> 3
         assert s[4]["h2_mol"] == s[2]["produce"]["h2_mol"]            # H2 2 -> 4 (limitante)
-        assert s[5]["ch4_mol"] == s[4]["produce"]["nh3_mol"]          # "combustible" 4 -> 5
+        assert s[5]["nh3_mol"] == s[4]["produce"]["nh3_mol"]          # NH3 4 -> 5 (reactivo real)
 
 
 def test_el_rendimiento_es_real_sobre_teorica():
@@ -66,6 +66,17 @@ def test_el_rendimiento_es_real_sobre_teorica():
         s = nivel.sortear(rng)
         pct = s[5]["resp"]["rendimiento_pct"]
         assert abs(s[5]["real_g"] - s[5]["teorica_g"] * pct / 100) < 0.05
+
+
+def test_requeridos_y_activaciones_por_sala():
+    s = nivel.sortear(random.Random(3))
+    # Sala 1: hay que fijar los dos diales con los valores correctos
+    assert nivel.requeridos(s, 1) == {"dial_h2": s[1]["resp"]["H2_mol"], "dial_o2": s[1]["resp"]["O2_mol"]}
+    # Sala 3: además de la balanza, hay que abrir la válvula de NaOH
+    assert nivel.requeridos(s, 3) == {"balanza": s[3]["resp"]["nacl_g"]}
+    assert nivel.activaciones(3) == ["valvula_naoh"]
+    assert nivel.activaciones(1) == []
+    assert [nivel.concepto(n) for n in range(1, 6)] == nivel.CONCEPTOS
 
 
 def test_la_puerta_solo_abre_con_las_dos_palancas_en_menos_de_2s():

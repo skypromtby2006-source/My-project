@@ -39,11 +39,13 @@ Los números **los sortea el servidor en cada partida** (dentro de rangos que de
 | 2 | **Puente de cadenas** (puentes sobre ácido verde) | `2Na + 2H₂O → 2NaOH + H₂` | Relación **mol a mol** | Cristales de Na (elige cuántos) | El agua de la sala 1 (llega por el montacargas) y la tabla de proporciones | **NaOH** y **H₂** |
 | 3 | **Laboratorio de tanques** (tanques verdes, vapor) | `NaOH + HCl → NaCl + H₂O` | **Masa a masa** (gramos y masa molar) | **Tabla de masas molares** · balanza | El tanque de HCl indica sus **gramos** · válvula de NaOH | **NaCl** (llave de sal) |
 | 4 | **Reactor de Haber** (sala de máquinas, rojo) | `N₂ + 3H₂ → 2NH₃` | **Reactivo limitante** | El H₂ que llegó de la sala 2 (cantidad limitada) | N₂ en abundancia · un dial con "¿cuántos mol de NH₃ salen?" | **NH₃** (combustible del portón) |
-| 5 | **El Portón final** (cripta, calavera de cristal) | `CH₄ + 2O₂ → CO₂ + 2H₂O` | **Rendimiento porcentual** | Masa teórica (tiene que calcularla) | Masa real obtenida que muestra el horno | **Fin del nivel** |
+| 5 | **El Portón final** (cripta, calavera de cristal) | `4NH₃ + 3O₂ → 2N₂ + 6H₂O` | **Rendimiento porcentual** | Masa teórica de N₂ (tiene que calcularla) y entra el **rendimiento %** | Masa real de N₂ que muestra el horno | **Fin del nivel** |
 
 Cada fila es una progresión: balanceo → mol → masa → limitante → rendimiento. Es el orden en que se enseña estequiometría en secundaria. El docente lo puede citar en la justificación pedagógica.
 
 Si el diseño concreto de alguna tarea física no cierra con los números, Claude Code **propone un ajuste en el reporte** en lugar de inventarlo en silencio. El cliente decide.
+
+> **Decisiones del PM sobre S4-1 (09/11):** (1) `n` (mol de agua base) se sortea en `{6, 12, 18, 24, 30, 36}` para que las 5 salas den enteros a la vez. (2) Masas molares reales (Cl = 35,5); la balanza de la Sala 3 muestra 1 decimal. (3) La Sala 5 pasa a la **combustión del amoníaco** (`4NH₃ + 3O₂ → 2N₂ + 6H₂O`): el NH₃ de la Sala 4 es su reactivo real, así el encadenamiento cierra químicamente (Opción B del reporte S4-1).
 
 ## 3. Diseño técnico
 

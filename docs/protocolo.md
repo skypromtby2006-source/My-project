@@ -186,14 +186,15 @@ El perfil guarda **solo** usuario, nombre visible y color: los usuarios son estu
 
 Si la BD no está disponible (o en el Plan B2, sin Docker), el servidor sigue funcionando en memoria, **perfiles y progreso incluidos**, pero se pierden al cerrarlo; lo avisa con un `WARNING` al arrancar. En una demo en vivo no debe caerse todo por la base de datos.
 
-## Borrador Sprint 4 — Laberinto de las 5 puertas (aún no implementado en server.py ni en C#)
+## Sprint 4 — Laberinto de las 5 puertas (servidor implementado en S4-1; cliente C# en S4-2)
 
-> Diseño del protocolo nuevo (SPRINT4 §3.2). Se documenta ahora, en S4-1, pero se
-> **implementa en ambos lados en S4-1/S4-2**. Hasta entonces convive con el
-> protocolo del laberinto; la misión "Sintetizar agua" se retira (la reemplaza la Sala 1).
-
-El servidor valida **todo**; el cliente solo manda intenciones. El nivel y los números
-viven en `servidor/niveles/laberinto_01.json` + `servidor/nivel.py` (ver reporte S4-1).
+> Protocolo nuevo (SPRINT4 §3.2). **Implementado y testeado en server.py (S4-1).** El
+> cliente de primera persona lo consume en S4-2. La partida se arranca con
+> `{"t":"iniciar","modo":"laberinto"}`; sin `modo` (o `modo:"agua"`) sigue corriendo la
+> misión legada "Sintetizar agua", que se retira del todo en S4-5 junto con la migración
+> del panel a "errores por concepto" (§3.4). El servidor valida **todo**; el cliente solo
+> manda intenciones. El nivel y los números viven en `servidor/niveles/laberinto_01.json`
+> + `servidor/nivel.py`.
 
 Del cliente al servidor (durante la partida):
 

@@ -28,7 +28,7 @@
   },
   "ventana_palanca_s": 2.0,
   "_sorteo": "Los números los sortea el servidor (nivel.sortear). n = mol de agua base, SIEMPRE múltiplo de 6 para que las 5 salas den enteros a la vez. Los rangos de abajo son informativos; la fuente es nivel.py.",
-  "sorteo": { "base_n_opciones": [6, 12, 18, 24], "rendimiento_pct_opciones": [60, 70, 75, 80, 90] },
+  "sorteo": { "base_n_opciones": [6, 12, 18, 24, 30, 36], "rendimiento_pct_opciones": [60, 70, 75, 80, 90] },
   "salas": [
     {
       "n": 1,
@@ -103,14 +103,14 @@
       "nombre": "El Porton final",
       "ambientacion": "cripta, calavera de cristal",
       "luz": "#C9A227",
-      "reaccion": "CH4 + 2 O2 -> CO2 + 2 H2O",
+      "reaccion": "4 NH3 + 3 O2 -> 2 N2 + 6 H2O",
       "concepto": "rendimiento",
-      "wizard_tiene": ["masa teorica (tiene que calcularla)"],
-      "player_tiene": ["masa real que muestra el horno"],
+      "wizard_tiene": ["masa teorica (tiene que calcularla) y entra el rendimiento %"],
+      "player_tiene": ["masa real de N2 que muestra el horno"],
       "produce": "fin del nivel",
-      "_ajuste_pendiente": "El combustible que llega de la sala 4 es NH3, no CH4. Encadenamiento quimico roto: ver docs/reportes/fase-s4-1.md, decide el cliente.",
+      "_decision_s4_1": "Opcion B: la combustion del amoniaco usa el NH3 de la sala 4 como reactivo real. El encadenamiento cierra quimicamente.",
       "consolas": {
-        "wizard": [{ "id": "consola_teorica", "tipo": "entrada", "pos": [17, 1], "responde": "teorica_g" }],
+        "wizard": [{ "id": "consola_teorica", "tipo": "entrada", "pos": [17, 1], "responde": "rendimiento_pct" }],
         "player": [{ "id": "horno", "tipo": "lectura", "pos": [5, 1], "muestra": "real_g" }]
       },
       "montacargas": null,

@@ -30,8 +30,20 @@ CONCEPTOS = ["balanceo", "mol", "masa", "limitante", "rendimiento"]
 #   - par        -> O2 (sala 1) y H2 (sala 2) enteros; gramos de sala 3 enteros
 #   - múlt. de 3 -> NH3 (sala 4, reactivo limitante) entero
 # 6 = mcm(2, 3). Ver el informe S4-1, sección "Que los números cierren".
-BASE_N = [6, 12, 18, 24]
+# Rango ampliado a pedido del PM (decisión S4-1): {6..36}.
+BASE_N = [6, 12, 18, 24, 30, 36]
 RENDIMIENTOS = [60, 70, 75, 80, 90]  # % que puede mostrar el horno de la Sala 5
+
+# Qué consola debe quedar en qué valor para abrir cada sala (ids del JSON -> clave
+# en `resp` del sorteo) y qué objeto hay que activar además de bajar la palanca.
+_REQ = {
+    1: {"dial_h2": "H2_mol", "dial_o2": "O2_mol"},
+    2: {"dial_na": "Na_mol"},
+    3: {"balanza": "nacl_g"},
+    4: {"dial_nh3": "nh3_mol"},
+    5: {"consola_teorica": "rendimiento_pct"},
+}
+_ACTIVAR = {3: ["valvula_naoh"]}  # la válvula de NaOH, además de las dos palancas
 
 
 def masa_molar(atomos: dict) -> float:
@@ -57,10 +69,13 @@ def sortear(rng: random.Random | None = None) -> dict:
     p = rng.choice(RENDIMIENTOS)    # rendimiento de la sala 5
 
     h2_sala2 = n // 2               # subproducto de la sala 2 que limita la sala 4
-    nh3 = (2 * h2_sala2) // 3       # limitante H2: NH3 = 2/3 * H2 = n/3
-    ch4 = nh3                       # "combustible" que llega al horno (ver ajuste S4-1)
-    co2_teorica_g = masa_molar({"C": 1, "O": 2}) * ch4    # 44 g/mol * mol
-    real_g = round(co2_teorica_g * p / 100, 1)            # lo que muestra el horno
+    nh3 = (2 * h2_sala2) // 3       # limitante H2: NH3 = 2/3 * H2 = n/3 (par, por n múlt. de 6)
+    # Sala 5 (decisión S4-1, Opción B): combustión del amoníaco 4NH3 + 3O2 -> 2N2 + 6H2O.
+    # El NH3 de la sala 4 SÍ es el reactivo: el encadenamiento es químicamente real.
+    # El rendimiento se mide sobre el N2 producido (2 N2 por cada 4 NH3).
+    n2_mol = nh3 // 2               # 4 NH3 -> 2 N2; nh3 par -> entero
+    teorica_g = masa_molar({"N": 2}) * n2_mol             # 28 g/mol * mol de N2
+    real_g = round(teorica_g * p / 100, 1)                # lo que muestra el horno
 
     return {
         "base_n": n,
@@ -83,11 +98,29 @@ def sortear(rng: random.Random | None = None) -> dict:
             "resp": {"nh3_mol": nh3},
             "produce": {"nh3_mol": nh3}},
         5: {"concepto": "rendimiento",
-            "ch4_mol": ch4,
-            "teorica_g": co2_teorica_g,
+            "reaccion": "4 NH3 + 3 O2 -> 2 N2 + 6 H2O",
+            "nh3_mol": nh3,
+            "n2_teorica_mol": n2_mol,
+            "teorica_g": teorica_g,
             "real_g": real_g,
             "resp": {"rendimiento_pct": p}},
     }
+
+
+def concepto(sala_num: int) -> str:
+    """balanceo | mol | masa | limitante | rendimiento, según la sala (1..5)."""
+    return CONCEPTOS[sala_num - 1]
+
+
+def requeridos(sorteo: dict, sala_num: int) -> dict:
+    """{consola_id: valor_esperado} que hay que fijar para abrir la sala."""
+    resp = sorteo[sala_num]["resp"]
+    return {cid: resp[clave] for cid, clave in _REQ[sala_num].items()}
+
+
+def activaciones(sala_num: int) -> list:
+    """Objetos que hay que activar (interactuar) además de las dos palancas."""
+    return list(_ACTIVAR.get(sala_num, []))
 
 
 def comparar(sorteo_sala: dict, clave: str, recibido) -> tuple[bool, object]:

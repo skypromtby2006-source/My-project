@@ -1,52 +1,49 @@
-## Reporte Fase S4-1 — Nivel como dato, los 5 puzzles y el sorteo de números
+## Reporte Fase S4-1 — Servidor: nivel como dato, los 5 puzzles y el protocolo nuevo
 
-> Arranque del Sprint 4 (lunes 09/11). Esta fase es el servidor: el nivel vive en
-> un JSON, el servidor sortea los números y valida. Primera persona, greybox y el
-> protocolo nuevo completo vienen en S4-2. **Hay 3 decisiones de diseño abajo
-> (sección "Que los números cierren") que necesito que el cliente resuelva antes
-> de terminar S4-1.**
+> Sprint 4. Estado: **S4-1 terminada.** El nivel vive en un JSON, el servidor sortea los
+> números, valida los 5 puzzles por el protocolo nuevo y registra los datos para la
+> investigación. Las 3 decisiones de diseño que quedaron abiertas las resolvió el PM y
+> ya están aplicadas (ver abajo). Hay **una decisión de alcance** que tomé yo y que
+> conviene que el PM confirme: el retiro escalonado de "Sintetizar agua".
 
 ### Hecho
-- **Git / versión:**
-  - `v0.4` (Sprint 3, panel de administración) mergeada a `main` con merge-commit y **tag `v0.4-demo`**.
-  - Rama **`sprint-4`** creada desde `main`.
-  - **Fix del §6** (pendiente del lunes): `server.py` ahora atrapa `UnicodeDecodeError`/`ValueError` además de `JSONDecodeError`, registra `WARNING "Datos no válidos desde <ip> (¿navegador o escáner en el puerto del juego?)"` y **cierra** esa conexión. Es el primer commit de `sprint-4`.
-- **El nivel es un dato:** `servidor/niveles/laberinto_01.json` con una grilla de texto por lado (greybox, se refina en S4-2) y los 5 puzzles (reacción, concepto, consolas, montacargas, puerta con palanca por lado).
-- **Sorteo con enteros garantizados:** `servidor/nivel.py` sortea los números de cada partida dentro de rangos que **siempre** dan resultados enteros, modela el encadenamiento (lo que produce una sala = lo que recibe la siguiente) y trae el validador de la ventana de 2 s de las palancas.
+- **Decisiones del PM aplicadas:**
+  1. `n` (mol de agua base) se sortea en **{6, 12, 18, 24, 30, 36}**.
+  2. **Masas molares reales** (Cl = 35,5 → HCl 36,5 y NaCl 58,5); la balanza de la Sala 3 trabaja con 1 decimal.
+  3. **Sala 5 = combustión del amoníaco** `4NH₃ + 3O₂ → 2N₂ + 6H₂O` (Opción B): el NH₃ de la Sala 4 es su reactivo real, el encadenamiento cierra químicamente. Actualicé la fila de la Sala 5 en `MDs/SPRINT4.md §2`.
+- **Protocolo nuevo conectado en `server.py`** (SPRINT4 §3.2), con validación total del lado del servidor:
+  - `dial {consola, valor}`, `interactuar {obj, accion}`, `montacargas {obj}`, `palanca {puerta}` y el broadcast `sala_estado {sala, concepto, reaccion, puerta, datos, palancas, mensaje}`.
+  - `pos` ahora incluye **`pitch`** (inclinación de la cabeza) para la primera persona.
+  - **Apertura conjunta real:** la puerta solo abre si los dos lados dejaron su parte correcta **y** bajan su palanca con < 2 s de diferencia (clase `Partida` + `nivel.palanca_ok`). Anti-trampa de lado: un Player no puede tocar una consola del Wizard.
+  - Eventos nuevos: **`error_estequiometria {sala, concepto, esperado, recibido, usuario}`**, **`sala_completada {sala, segundos, errores}`** y `nivel_completado`. Progreso del nivel guardado en `misiones_completadas` (mision = "laberinto").
+- **El nivel es un dato:** `servidor/niveles/laberinto_01.json` (grilla por lado + los 5 puzzles) y `servidor/nivel.py` (carga, sorteo con enteros garantizados, validadores).
 
 ### Probado (cómo y resultado)
-- `pytest` del servidor: **35 pasan** (29 previos del panel + 6 nuevos de `test_nivel.py`).
-- `test_nivel.py` incluye: carga del JSON, **3000 sorteos** verificando que las 5 salas den enteros, cierre del encadenamiento entre salas, rendimiento = real/teórica, y la ventana de 2 s (abre con < 2 s, no abre si baja uno solo).
-- El fix del §6 sigue cubierto por `test_bytes_binarios_no_tumban_al_servidor`.
+- `pytest` del servidor: **40 pasan** (29 del panel sin tocar + 7 de `test_nivel.py` + 4 de `test_laberinto.py`).
+- `test_laberinto.py` maneja el juego por el **protocolo TCP real** (fixtures `servidor_juego` + `bot`):
+  - **Un test que recorre las 5 salas enteras** con respuestas correctas → abre el portón, 5 `sala_completada` + `nivel_completado`, progreso guardado.
+  - **Un error por concepto** (balanceo/mol/masa/limitante/rendimiento): con la parte mal, aunque bajen las dos palancas **no abre**, y queda el `error_estequiometria` con su concepto; al corregir, abre.
+  - **Ventana de 2 s** de las palancas (abre con < 2 s, no abre con 5 s) y rechazo de consola ajena.
+- `test_nivel.py`: 3000 sorteos dan enteros en las 5 salas (incluida la Sala 5 nueva), el encadenamiento cierra (NH₃ de la 4 → reactivo de la 5) y `requeridos`/`activaciones` por sala.
+- `probar_perfiles` / el cliente ya desplegado: **no afectados** — el default de `iniciar` sigue siendo la misión de agua; el laberinto es opt-in con `modo:"laberinto"`. (Necesitan servidor Docker + build para correr; no se pudieron ejecutar en esta máquina de desarrollo sin levantar el entorno.)
 
-### Que los números cierren — 3 decisiones para el cliente (SPRINT4 §2 y §46)
-El §34 pide "rangos que den resultados enteros". Al encadenar las 5 reacciones aparecen tres puntos que **no cierran solos**. Propongo, no invento:
+### Que los números cierren (resuelto)
+El encadenamiento obliga a que `n` sea **múltiplo de 6** (par → O₂/H₂ y gramos enteros; múltiplo de 3 → NH₃ entero). Con las masas de secundaria, la Sala 3 da gramos enteros porque `n` es par. La Sala 5 (combustión de NH₃) mide el rendimiento sobre el N₂ producido: `nh3 = n/3` siempre es par, así que `N₂ = nh3/2` y su masa teórica (28·mol) son enteros, y el % sorteado {60,70,75,80,90} es la respuesta. Todo verificado con 3000 sorteos.
 
-**1. El número base `n` (mol de agua de la Sala 1) tiene que ser múltiplo de 6.**
-`n` recorre todo el nivel. Para que las 5 salas den enteros a la vez hace falta que sea:
-- **par** → O₂ de la Sala 1 (`n/2`) y H₂ de la Sala 2 (`n/2`) enteros, y gramos enteros en la Sala 3;
-- **múltiplo de 3** → NH₃ de la Sala 4 (`n/3`, reactivo limitante) entero.
-mcm(2, 3) = 6. Implementado como `n ∈ {6, 12, 18, 24}`. **Consecuencia:** no se puede sortear `n = 5` ni `n = 8`. Es una restricción matemática, no una elección, pero la informo porque acota la dificultad. *Si el cliente quiere más variedad, se puede ampliar a {6, 12, 18, 24, 30, 36} sin romper nada.* → **Decisión: ¿rango {6..24} o más amplio?**
-
-**2. Sala 3 (masa a masa): las masas molares de secundaria tienen ,5.**
-Con Cl = 35,5, HCl = 36,5 g/mol y NaCl = 58,5 g/mol. Los gramos solo son enteros si el mol que llega es par. Como `n` es múltiplo de 6 (par), **cierra**: p. ej. `n=6` → 219 g de HCl → 351 g de NaCl. Pero la balanza puede mostrar ,5 si el cliente quisiera sortear gramos sueltos. Propongo **mantener el encadenamiento (HCl = n mol) y que la balanza muestre 1 decimal**, aclarando en el puzzle que la masa molar del Cl es 35,5. No es un bug; es presentación. → **Decisión: ¿1 decimal en la balanza, OK?**
-
-**3. Sala 5 (rendimiento): el encadenamiento químico se rompe (NH₃ → CH₄).**
-La Sala 4 produce **NH₃** ("combustible del portón") y la Sala 5 es la combustión del **metano** (`CH₄ + 2O₂ → CO₂ + 2H₂O`). NH₃ no es CH₄: el "producto de una sala se usa en la siguiente" (§29) deja de ser cierto en la última sala. Hoy lo modelé como que el NH₃ llega al horno y "hace de" CH₄, pero eso es físicamente falso. Dos opciones:
-- **Opción A (mínimo cambio, narrativa):** el NH₃ es el combustible que **enciende el horno**, y la reacción que se resuelve es la del metano con CH₄ propio de la cripta. El encadenamiento de la última sala pasa a ser narrativo ("el NH₃ prende el portón"), no químico.
-- **Opción B (químicamente honesta, recomendada):** cambiar la Sala 5 a la **combustión del amoníaco**: `4NH₃ + 3O₂ → 2N₂ + 6H₂O`. Así el NH₃ de la Sala 4 **sí** es el reactivo de la Sala 5 y el rendimiento se calcula sobre el agua (o el NO) producido. Mantiene el encadenamiento real y es más defendible ante el docente. Cuesta cambiar una fila de la tabla §2 y la masa molar del cálculo.
-
-Recomiendo **Opción B**. Dejé el puzzle marcado con `_ajuste_pendiente` en el JSON para no congelar la decisión.
+### Decisión de alcance que tomé (conviene que el PM la confirme)
+**No borré del todo "Sintetizar agua"; lo retiré de forma escalonada.** El laberinto es el juego nuevo (vía `modo:"laberinto"`); la misión de agua queda como **modo legado opt-in**.
+**Por qué:** borrarla ahora deja `pytest` en rojo (lo que §7 pide en verde). La misión de agua está acoplada a **54 usos en 7 archivos**, incluido todo el panel de Sprint 3 (`estadisticas.py`, `admin_api.py`), el **frontend React** (`Estadisticas.jsx`, `UsuarioDetalle.jsx`) y los `probar_*`, porque el panel muestra **errores por elemento** y confusiones. Reemplazar eso por **errores por concepto** es exactamente el trabajo del §3.4, que el calendario agenda para **S4-5 (Dom 15)**. Hacerlo ahora dejaría el panel (deliverable aprobado de v0.4) a medio migrar.
+**Qué hice en su lugar:** el servidor ya emite `error_estequiometria`/`sala_completada` con el concepto, listos para que el panel los consuma en S4-5. El retiro final del agua y la migración del panel van juntos en S4-5.
+→ **Si el PM quiere el retiro total ahora**, lo hago, pero arrastra la migración del panel a concepto (backend + React + sus tests) dentro de esta fase.
 
 ### Pendiente / riesgos
-- **S4-1 todavía no está "terminado" según §7:** falta wirear en `server.py` el protocolo nuevo (`interactuar`, `dial`, `montacargas`, `palanca`, `sala_estado` + `pitch` en `pos`), retirar la misión "Sintetizar agua" y su test, emitir `error_estequiometria` y `sala_completada`, y los **tests por sala** que recorran cada una entera (correcta + una incorrecta por concepto). La base de datos y los validadores ya están listos para engancharlo. **No lo hice todavía porque la decisión 3 cambia la Sala 5** y prefiero no implementar sobre un número que el cliente puede mover.
-- Riesgo de alcance: S4-2 (primera persona + greybox) es grande; si la decisión 3 tarda, igual puedo avanzar salas 1–4.
-- Las grillas del JSON son greybox de relleno; la geometría jugable se define en S4-2.
+- S4-2 (primera persona + greybox desde el JSON) es la fase grande que sigue; las grillas del JSON son greybox de relleno y se finalizan ahí.
+- El panel sigue mostrando estadísticas **por elemento** (del juego legado) hasta la migración a concepto en S4-5.
 
 ### Necesito de Jona
-1. **Las 3 decisiones** de arriba (sobre todo la **3**: ¿Opción A narrativa u **Opción B** combustión de NH₃?).
-2. Confirmar que empiece a **descargar los assets CC0** (§4: KayKit Dungeon Remastered, Quaternius, Poly Haven) a `QuimicaVR/Assets/ThirdParty/<pack>/` — es tarea 🧑 del lunes y no bloquea el servidor.
-3. **¿Pusheo `main` + tag `v0.4-demo` + `sprint-4` a GitHub ahora?** Lo dejé commiteado en local a la espera de tu OK (es acción hacia afuera).
+1. **Confirmar la decisión de alcance** (retiro escalonado del agua) o pedir el retiro total ahora.
+2. Avanzar con la **descarga de assets CC0** (§4) a `QuimicaVR/Assets/ThirdParty/<pack>/` — tarea 🧑, no bloquea.
+3. Nada más del lado numérico: las 3 decisiones ya están aplicadas y testeadas.
 
-### Commit
-- `sprint-4`: fix del §6, brief del Sprint 4, y este arranque S4-1 (nivel + sorteo + tests). Hashes en el push.
+### Commit / push
+- Rama `sprint-4`, pusheada a GitHub junto con `main` + tag `v0.4-demo`. Hashes al pie del push.

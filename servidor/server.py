@@ -38,6 +38,8 @@ import time
 import uuid
 from datetime import datetime, timezone
 
+import nivel  # el nivel es un dato: carga, sorteo y validación del laberinto (S4)
+
 HOST = "0.0.0.0"
 PUERTO = int(os.getenv("PUERTO", "7777"))
 DATABASE_URL = os.getenv("DATABASE_URL")  # si no existe, el servidor funciona sin BD
@@ -130,7 +132,8 @@ class Sala:
         self.maximo = maximo
         self.estado = "esperando"  # esperando | jugando
         self.jugadores: dict[str, Jugador] = {}
-        self.mision: Mision | None = None
+        self.mision: Mision | None = None      # modo legado "Sintetizar agua"
+        self.partida: "Partida | None" = None  # modo laberinto (S4)
 
     def info(self) -> dict:
         return {
@@ -220,6 +223,117 @@ class Mision:
             "formula": FORMULA,
             "estado": self.estado(),
         }
+
+
+# ----------------------------------------------------------------- laberinto (S4)
+class Partida:
+    """Una partida del laberinto de las 5 puertas. El nivel y los números son la
+    fuente de verdad (servidor/niveles/laberinto_01.json + nivel.py); el cliente
+    solo manda intenciones y el servidor valida. Reemplaza a Mision como juego; la
+    misión "Sintetizar agua" queda como modo legado hasta que el panel migre a
+    "errores por concepto" (S4-5).
+
+    Esta clase guarda estado y hace comprobaciones puras (sin I/O). Los efectos
+    (registrar eventos, guardar progreso) los hace manejar_laberinto."""
+
+    def __init__(self, rng=None):
+        self.datos = nivel.cargar()
+        self.sorteo = nivel.sortear(rng)
+        self.sala_idx = 0                       # 0..4
+        self.valores: dict = {}                 # consola_id -> valor fijado
+        self.activados: set = set()             # objetos activados (interactuar/montacargas)
+        self.palancas: dict = {}                # "wizard"/"player" -> t_monotonic de la bajada
+        self.errores = 0                        # del nivel entero
+        self.errores_sala = 0                   # de la sala actual (para sala_completada)
+        self.errores_por: dict = {}             # usuario -> errores (para el progreso)
+        self.errores_por_concepto: dict = {}    # concepto -> veces (dato de S4-5)
+        self.completada = False                 # nivel entero terminado
+        self.mensaje = ""
+        self.t_inicio = time.monotonic()
+        self.t_sala = time.monotonic()
+        # consola_id -> lado dueño: así el servidor rechaza que el Player toque una
+        # consola del Wizard aunque un cliente modificado lo intente.
+        self.lado_de_consola: dict = {}
+        for s in self.datos["salas"]:
+            for lado in ("wizard", "player"):
+                for c in s["consolas"][lado]:
+                    self.lado_de_consola[c["id"]] = lado
+
+    @property
+    def sala_num(self) -> int:
+        return self.sala_idx + 1
+
+    def sala_actual(self) -> dict:
+        return self.datos["salas"][self.sala_idx]
+
+    def consolas_de_sala(self) -> set:
+        s = self.sala_actual()
+        return {c["id"] for lado in ("wizard", "player") for c in s["consolas"][lado]}
+
+    def visible(self) -> dict:
+        """Lo que ve el cliente de la sala actual: el sorteo de la sala MENOS la
+        respuesta correcta y lo que produce (eso no viaja nunca)."""
+        s = {k: v for k, v in self.sorteo[self.sala_num].items() if k not in ("resp", "produce")}
+        return s
+
+    def inicio_info(self) -> dict:
+        return {
+            "nivel": self.datos["id"],
+            "lados": self.datos["lados"],
+            "ventana_palanca_s": self.datos.get("ventana_palanca_s", 2.0),
+            "total_salas": len(self.datos["salas"]),
+            "sala": self.sala_estado(),
+        }
+
+    def sala_estado(self) -> dict:
+        s = self.sala_actual()
+        return {
+            "sala": self.sala_num,
+            "nombre": s["nombre"],
+            "concepto": s["concepto"],
+            "reaccion": s["reaccion"],
+            "luz": s["luz"],
+            "puerta": s["puerta"]["id"],
+            "datos": self.visible(),
+            "palancas": {lado: (lado in self.palancas) for lado in ("wizard", "player")},
+            "mensaje": self.mensaje,
+            "completada_nivel": self.completada,
+        }
+
+    def fijar(self, consola_id: str, valor):
+        self.valores[consola_id] = valor
+
+    def valor_ok(self, consola_id: str):
+        """True/False si la consola es requerida y su valor coincide; None si no es
+        una consola requerida de esta sala."""
+        req = nivel.requeridos(self.sorteo, self.sala_num)
+        if consola_id not in req:
+            return None
+        v = self.valores.get(consola_id)
+        if v is None:
+            return False
+        esperado = req[consola_id]
+        try:
+            if isinstance(esperado, float):
+                return abs(float(v) - esperado) < 1e-6
+            return int(v) == esperado if isinstance(esperado, int) else v == esperado
+        except (TypeError, ValueError):
+            return False
+
+    def partes_correctas(self) -> bool:
+        """Los dos lados dejaron su parte: todas las consolas requeridas en su valor
+        y todos los objetos a activar, activados."""
+        req = nivel.requeridos(self.sorteo, self.sala_num)
+        if any(self.valor_ok(cid) is not True for cid in req):
+            return False
+        return all(obj in self.activados for obj in nivel.activaciones(self.sala_num))
+
+    def ambas_palancas(self) -> bool:
+        """Las dos palancas bajadas con menos de la ventana (2 s) de diferencia."""
+        tw, tp = self.palancas.get("wizard"), self.palancas.get("player")
+        if tw is None or tp is None:
+            return False
+        return nivel.palanca_ok(tw, tp, self.datos.get("ventana_palanca_s", 2.0))
 
 
 # Puntos de aparición: una fila centrada delante de la mesa, 2.5 m entre jugadores
@@ -382,16 +496,16 @@ async def actualizar_usuario(usuario: str, nombre: str, color: str):
         await c.execute("UPDATE usuarios SET nombre = $2, color = $3 WHERE usuario = $1", usuario, nombre, color)
 
 
-async def guardar_mision(j: "Jugador", sala: str, duracion_s: float, errores: int):
+async def guardar_mision(j: "Jugador", sala: str, duracion_s: float, errores: int, mision: str = MISION_AGUA):
     if db is None:
-        misiones_mem.append({"usuario": j.usuario, "mision": MISION_AGUA, "sala": sala,
+        misiones_mem.append({"usuario": j.usuario, "mision": mision, "sala": sala,
                              "duracion_s": duracion_s, "errores": errores,
                              "fecha": datetime.now(timezone.utc)})
         return
     async with db.acquire() as c:
         await c.execute(
             "INSERT INTO misiones_completadas (usuario_id, mision, sala, duracion_s, errores) "
-            "VALUES ($1, $2, $3, $4, $5)", j.usuario_id, MISION_AGUA, sala, duracion_s, errores)
+            "VALUES ($1, $2, $3, $4, $5)", j.usuario_id, mision, sala, duracion_s, errores)
 
 
 async def progreso(j: "Jugador") -> dict:
@@ -650,26 +764,44 @@ async def manejar(j: Jugador, m: dict):
         if not all(x.listo for x in sala.jugadores.values() if x.id != sala.host_id):
             return await j.enviar({"t": "error", "msg": "Faltan jugadores por marcar 'Listo'"})
         sala.estado = "jugando"
-        sala.mision = Mision()
         puntos = apariciones(sala)
-        for p in puntos:  # posición inicial: si alguien se va antes de moverse, lo que lleve cae ahí
-            x = sala.jugadores[p["id"]]
-            x.x, x.y, x.z = p["x"], p["y"], p["z"]
-        await difundir(sala, {"t": "inicio", "sala": sala.info(), "mision": sala.mision.info(), "apariciones": puntos})
-        log.info("Partida iniciada en %s", sala.id)
-        await registrar("partida_iniciada", {"sala": sala.id, "jugadores": len(sala.jugadores)})
+        for pt in puntos:  # posición inicial: si alguien se va antes de moverse, lo que lleve cae ahí
+            x = sala.jugadores[pt["id"]]
+            x.x, x.y, x.z = pt["x"], pt["y"], pt["z"]
+        # "agua" (legado, misión Sintetizar agua) | "laberinto" (juego nuevo del Sprint 4).
+        # Por ahora el default es "agua" para no cambiar al cliente ya desplegado ni al
+        # panel; el cliente de primera persona (S4-2) pedirá modo "laberinto". El retiro
+        # definitivo del agua va con la migración del panel a "errores por concepto" (S4-5).
+        modo = str(m.get("modo", "agua"))
+        if modo == "laberinto":
+            sala.mision = None
+            sala.partida = Partida()
+            await difundir(sala, {"t": "inicio", "sala": sala.info(),
+                                  "nivel": sala.partida.inicio_info(), "apariciones": puntos})
+        else:
+            sala.partida = None
+            sala.mision = Mision()
+            await difundir(sala, {"t": "inicio", "sala": sala.info(),
+                                  "mision": sala.mision.info(), "apariciones": puntos})
+        log.info("Partida iniciada en %s (modo %s)", sala.id, modo)
+        await registrar("partida_iniciada", {"sala": sala.id, "jugadores": len(sala.jugadores), "modo": modo})
 
     elif t == "pos":
         if j.sala is None or j.sala.estado != "jugando":
             return
         datos = {"t": "pos", "id": j.id}
-        for k in ("x", "y", "z", "ry"):
+        # pitch (inclinación de la cabeza) se agrega en S4 para ver hacia dónde mira
+        # el otro jugador en primera persona; los clientes viejos no lo mandan (0).
+        for k in ("x", "y", "z", "ry", "pitch"):
             datos[k] = float(m.get(k, 0))
         j.x, j.y, j.z = datos["x"], datos["y"], datos["z"]
         await difundir(j.sala, datos, excepto=j)
 
     elif t in ("agarrar", "soltar", "senalar", "reiniciar"):
         await manejar_mision(j, t, m)
+
+    elif t in ("dial", "interactuar", "montacargas", "palanca"):
+        await manejar_laberinto(j, t, m)
 
     elif t == "ping":
         await j.enviar({"t": "pong"})
@@ -785,6 +917,96 @@ async def guardar_progreso(sala: Sala, mision: Mision, duracion_s: float):
             log.info("Progreso guardado: %s en %s (%.1f s, %d errores)", p.usuario, sala.id, duracion_s, errores)
         except Exception as e:
             log.warning("No se pudo guardar el progreso de %s: %s", p.usuario, e)
+
+
+async def manejar_laberinto(j: Jugador, t: str, m: dict):
+    sala = j.sala
+    if sala is None or sala.estado != "jugando" or sala.partida is None:
+        return await j.enviar({"t": "error", "msg": "No hay una partida de laberinto en curso"})
+    p = sala.partida
+    if p.completada:
+        return await j.enviar({"t": "error", "msg": "El nivel ya está completo"})
+    lado = j.rol  # "wizard" (anfitrión) o "player"
+
+    if t == "dial":
+        cid = str(m.get("consola", ""))
+        if cid not in p.consolas_de_sala():
+            return await j.enviar({"t": "error", "msg": "Esa consola no es de esta sala"})
+        if p.lado_de_consola.get(cid) != lado:
+            return await j.enviar({"t": "error", "msg": "Esa consola no es de tu lado"})
+        p.fijar(cid, m.get("valor"))
+        # Cada valor mal puesto en una consola requerida es un error de estequiometría:
+        # es el dato de "errores por concepto" que analiza el panel (S4-5).
+        if p.valor_ok(cid) is False:
+            await registrar_error_estq(p, j, cid)
+        else:
+            p.mensaje = ""
+
+    elif t == "interactuar":
+        obj = str(m.get("obj", ""))
+        p.activados.add(obj)
+        p.mensaje = f"{obj}: {str(m.get('accion', 'usar'))[:20]}"
+
+    elif t == "montacargas":
+        # Pasa el producto al otro lado / a la sala siguiente. En greybox es un
+        # marcador; el encadenamiento numérico lo valida el servidor con el sorteo.
+        p.activados.add(f"mont_{p.sala_num}")
+        p.mensaje = "Objeto enviado por el montacargas"
+
+    elif t == "palanca":
+        p.palancas[lado] = time.monotonic()
+        if p.ambas_palancas() and p.partes_correctas():
+            await completar_sala(p, sala)
+        elif p.palancas.get("wizard") and p.palancas.get("player") and not p.ambas_palancas():
+            p.mensaje = "Las palancas no bajaron a la vez (menos de 2 s)"
+        elif not p.partes_correctas():
+            p.mensaje = "Falta la parte correcta de algún lado"
+
+    await difundir(sala, {"t": "sala_estado", **p.sala_estado()})
+
+
+async def registrar_error_estq(p: Partida, j: Jugador, consola_id: str):
+    concepto = p.sorteo[p.sala_num]["concepto"]
+    esperado = nivel.requeridos(p.sorteo, p.sala_num)[consola_id]
+    recibido = p.valores.get(consola_id)
+    p.errores += 1
+    p.errores_sala += 1
+    p.errores_por[j.usuario] = p.errores_por.get(j.usuario, 0) + 1
+    p.errores_por_concepto[concepto] = p.errores_por_concepto.get(concepto, 0) + 1
+    p.mensaje = f"{concepto}: valor incorrecto"
+    await registrar("error_estequiometria", {
+        "sala": p.sala_num, "concepto": concepto,
+        "esperado": esperado, "recibido": recibido, "usuario": j.usuario})
+
+
+async def completar_sala(p: Partida, sala: Sala):
+    seg = round(time.monotonic() - p.t_sala, 1)
+    await registrar("sala_completada", {"sala": p.sala_num, "segundos": seg, "errores": p.errores_sala})
+    log.info("Sala %d completada en %s (%.1f s, %d errores)", p.sala_num, sala.id, seg, p.errores_sala)
+    if p.sala_num >= len(p.datos["salas"]):
+        p.completada = True
+        p.mensaje = "¡Nivel completado!"
+        await registrar("nivel_completado", {
+            "sala": sala.id, "segundos": round(time.monotonic() - p.t_inicio, 1), "errores": p.errores})
+        await guardar_nivel(sala, p)
+    else:
+        p.mensaje = f"Sala {p.sala_num} completada"
+        p.sala_idx += 1
+        p.errores_sala = 0
+        p.palancas.clear()
+        p.t_sala = time.monotonic()
+
+
+async def guardar_nivel(sala: Sala, p: Partida):
+    # Un registro por cada Player presente al terminar el nivel; el Wizard guía.
+    duracion = round(time.monotonic() - p.t_inicio, 1)
+    for jug in [x for x in sala.jugadores.values() if x.rol == "player"]:
+        errores = p.errores_por.get(jug.usuario, 0)
+        try:
+            await guardar_mision(jug, sala.id, duracion, errores, mision="laberinto")
+            log.info("Nivel guardado: %s en %s (%.1f s, %d errores)", jug.usuario, sala.id, duracion, errores)
+        except Exception as e:
+            log.warning("No se pudo guardar el nivel de %s: %s", jug.usuario, e)
 
 
 async def cliente(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
