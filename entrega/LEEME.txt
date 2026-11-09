@@ -9,6 +9,13 @@ Contenido
   ServidorDedicado\   Servidor con Docker + PostgreSQL (opcional, para un aula entera)
 
 
+PASO 0 — Dónde descomprimir
+---------------------------
+  Descomprime el zip en Documentos o en el Escritorio, NO en "Archivos de
+  programa": el servidor guarda los datos en su propia carpeta y Windows no
+  deja escribir ahí. Si lo intentas, el servidor lo avisa y no arranca.
+
+
 PASO 1 — Abrir el servidor
 --------------------------
   Doble clic en  Servidor\QuimicaServidor.exe
@@ -62,6 +69,15 @@ Servidor dedicado con Docker (opcional)
   3. Doble clic en  ServidorDedicado\instalar_servidor.bat  (la primera vez
      tarda unos minutos). Al final muestra "SERVIDOR LISTO en el puerto 7777".
 
+  Plan C — sin Docker y sin el .exe: si un antivirus bloquea o borra
+  QuimicaServidor.exe (pasa a veces con programas armados con PyInstaller:
+  es un falso positivo), usa  ServidorDedicado\iniciar_servidor_sin_docker.bat.
+  Es el mismo servidor, corrido con Python: instala Python 3 desde
+  https://www.python.org/downloads/ (marca "Add python.exe to PATH") y haz
+  doble clic en el .bat. La primera vez instala dependencias (necesita
+  internet). Guarda los datos en ServidorDedicado\servidor\quimica.db. Para
+  el panel, crea el .env igual que en el paso 2 de arriba.
+
   Otros scripts de ServidorDedicado\:
      ver_logs.bat          Ver en vivo lo que pasa en el servidor
      ver_eventos_bd.bat    Ver los eventos guardados en PostgreSQL
@@ -80,3 +96,8 @@ Problemas frecuentes
   del panel                  archivo, al reabrir el servidor se genera otra.
   "Puerto en uso"            Ya hay otro servidor abierto (¿el de Docker?).
                              Cierra uno de los dos.
+  "No se puede escribir en   Descomprimiste en una carpeta protegida (como
+  la carpeta del servidor"   Archivos de programa). Muévelo a Documentos o
+                             al Escritorio.
+  El antivirus borra o       Falso positivo frecuente de PyInstaller. Usa el
+  bloquea el servidor        Plan C (ver "Servidor dedicado con Docker").

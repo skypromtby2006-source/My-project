@@ -88,6 +88,8 @@ Descomprime `QuimicaDemo_Windows_<versión>.zip` y sigue su `LEEME.txt`, que son
 1. `Servidor\QuimicaServidor.exe`: el **servidor local** (sin instalar nada). Muestra las IP, abre el panel y guarda los datos en `Servidor\quimica.db` (SQLite). Sin `.env`, inventa la contraseña del panel y la deja en `Servidor\admin.txt`.
 2. Abre `Juego\QuimicaDemo.exe` dos veces y conecta a `127.0.0.1`.
 
+Si un antivirus bloquea el `.exe` (falso positivo frecuente de PyInstaller), el **plan C** es `ServidorDedicado\iniciar_servidor_sin_docker.bat`: el mismo servidor con el Python de la PC, datos en SQLite. El zip va en Documentos o el Escritorio: en una carpeta sin permiso de escritura (Archivos de programa) el `.exe` avisa y no arranca.
+
 `ServidorDedicado\` trae la opción con **Docker + PostgreSQL** para un aula entera (`instalar_servidor.bat`, pgAdmin, logs). Ver `docs/decisiones.md` (Sprint 4) para cuándo usar cada uno.
 
 **De dónde sale el `.exe`:** GitHub Actions lo construye en Windows (`.github/workflows/servidor-exe.yml`) en cada tag `v*` y en cada push a `sprint-4` que toque `servidor/` o `panel/`, y le corre `probar_paquete.sh`. Para armar el zip de entrega:
