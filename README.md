@@ -59,11 +59,14 @@ scripts/servidor_eventos.sh
 
 1. Copiar `.env.example` como `.env` en la raíz del repo y poner `ADMIN_PASSWORD` y `JWT_SECRET`. El `.env` **no se sube a git**. Sin `ADMIN_PASSWORD`, el panel arranca deshabilitado y lo avisa en el log: nunca se usa una contraseña por defecto.
 2. `scripts/servidor_iniciar.sh` y abrir **http://localhost:8000**, o `http://<IP-de-la-PC>:8000` desde otro equipo o un celular de la misma red.
-3. Tests de la API (sin Docker):
+3. Tests del servidor y de la API, contra los **tres motores** (memoria, SQLite y PostgreSQL):
    ```bash
    python -m venv .venv && .venv/bin/pip install -r servidor/requirements-dev.txt
-   cd servidor && ../.venv/bin/python -m pytest
+   scripts/probar_tests.sh          # levanta un PostgreSQL descartable con Docker, corre pytest y lo apaga
    ```
+   Al final se ve `resultado por motor` con "N passed, 0 skipped" para cada uno. Sin Docker:
+   `cd servidor && ../.venv/bin/python -m pytest --motores=memoria,sqlite` (sin esa opción, los tests de
+   postgres **fallan** en vez de saltearse, para que nunca se dé por probado un motor que no se probó).
 
 El juego no depende del panel: si faltan las dependencias, la contraseña o el puerto 8000, el servidor del juego arranca igual. Las rutas de la API están en `MDs/SPRINT3.md` §2.4 y el guion de prueba en `docs/pruebas/s3-integral.md`.
 

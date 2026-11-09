@@ -38,7 +38,7 @@ Tomado de la explicación de la demo original (`_base/LEEME_demo_anterior.md`, e
 
 **Una sola conexión WebSocket para todo el panel**, compartida por las páginas. Cambiar de página no corta el flujo de logs. Se reconecta sola, con espera creciente, si el servidor se reinicia.
 
-**Los tests del panel corren sin BD** (`servidor/tests`, modo Plan B2) y no necesitan Docker. El camino con PostgreSQL se prueba con curl y con `probar_build.sh panel` contra el servidor real.
+**Los tests del panel corren sin BD** (`servidor/tests`, modo Plan B2) y no necesitan Docker. El camino con PostgreSQL se prueba con curl y con `probar_build.sh panel` contra el servidor real. *(Reemplazado en el Sprint 4: la batería corre contra memoria, SQLite y PostgreSQL; ver "Los tests corren contra los dos motores" más abajo.)*
 
 **Dependencias de tests aparte** (`servidor/requirements-dev.txt`): pytest y httpx no van en la imagen de Docker ni en el venv del Plan B2.
 
@@ -54,14 +54,17 @@ El juego necesita un servidor. Hay dos maneras de ofrecerlo, y conviven:
 
 | Diferencia | PostgreSQL | SQLite |
 |---|---|---|
-| Timestamp actual | `now()` | `datetime('now')` |
+| Timestamp actual | `now()` | `strftime('%Y-%m-%d %H:%M:%f', 'now')` (texto UTC con milisegundos: con solo segundos, dos filas del mismo instante empatan al ordenar) |
 | Clave autoincremental | `SERIAL PRIMARY KEY` | `INTEGER PRIMARY KEY AUTOINCREMENT` |
 | JSON | `JSONB` | `TEXT` (con las funciones `json1`) |
 | Fecha con zona | `TIMESTAMPTZ` | `TEXT` ISO-8601 (UTC) |
 | Búsqueda sin distinguir mayúsculas | `ILIKE` | `LIKE` (SQLite no distingue mayúsculas en ASCII) |
-| Placeholder de parámetro | `$1, $2, …` | `?` |
+| Placeholder de parámetro | `$1, $2, …` | `?1, ?2, …` (numerado, para reusar un parámetro igual que en PostgreSQL) |
+| Fecha como parámetro | `datetime` | texto UTC con el mismo formato que el timestamp actual |
 
-**Versión de SQLite:** se verificó que `RETURNING`, `FILTER` y `->>` funcionan en el `sqlite3` de la stdlib — comprobado aquí en **Python 3.14.8 con SQLite 3.54.0**. En el Python 3.12 del entorno de Jona el `sqlite3` trae SQLite ≥ 3.45, de sobra por encima del mínimo requerido (**3.38**, por `->>`). Se usa el `sqlite3` de la biblioteca estándar (sin dependencias nuevas, mejor para empaquetar con PyInstaller); como `sqlite3` es sincrónico, cada consulta corre en un hilo con `asyncio.to_thread` y un lock, porque SQLite serializa la escritura de todos modos.
+**Versión de SQLite:** se verificó que `RETURNING`, `FILTER` y `->>` funcionan en el `sqlite3` de la stdlib — comprobado aquí en **Python 3.14.8 con SQLite 3.54.0**. En el Python 3.12 del entorno de Jona el `sqlite3` trae SQLite ≥ 3.45, de sobra por encima del mínimo requerido (**3.38**, por `->>`). Se usa el `sqlite3` de la biblioteca estándar (sin dependencias nuevas, mejor para empaquetar con PyInstaller); como `sqlite3` es sincrónico, cada consulta corre en un hilo con `asyncio.to_thread` sobre **una única conexión** (`check_same_thread=False`) y un `threading.Lock` tomado *dentro* del hilo la serializa: el event loop nunca espera el lock, solo el resultado. Una sola conexión y no un pool porque SQLite admite un escritor a la vez. `PRAGMA journal_mode=WAL` (lectores y escritor no se bloquean si otra herramienta abre el archivo) y `busy_timeout=5000` (esperar en vez de fallar con "database is locked").
 
-**Los tests corren contra los dos motores.** La misma batería (perfiles, progreso, panel, laberinto) se parametriza: SQLite siempre, y PostgreSQL cuando hay una BD de prueba disponible (Docker). Así "mismas consultas" no es una promesa sino algo probado.
+**El juego no se congela mientras la BD trabaja (medido).** `tests/test_concurrencia.py` carga 500 000 errores, lanza la consulta de las estadísticas (~0,8 s solo de SQL) y mientras tanto un jugador hace `ping` sin parar; se mide el **hueco entre pongs**. Resultado: SQLite ~115 ms de hueco máximo, PostgreSQL ~55 ms. *Contraprueba:* con el backend SQLite sin `to_thread` el test falla (un solo pong en 0,8 s). El test también destapó que **asyncpg decodifica las filas dentro del loop**: 500 000 filas de una vez lo frenaban ~0,4 s, así que los resultados grandes se leen con un cursor de a 5000 filas (`fetch_grande`). El JSON y pandas de las estadísticas también van en un hilo; aun así, armar el DataFrame es una llamada en C que retiene el GIL, y con 500 000 errores deja cortes de ~0,25 s. Con los datos de un aula (miles de eventos) es imperceptible; si algún día molestara, el paso siguiente es calcular en un proceso aparte.
+
+**Los tests corren contra los dos motores.** La misma batería (perfiles, progreso, panel, laberinto) se parametriza con la fixture `motor`: `memoria`, `sqlite` y `postgres`. Así "mismas consultas" no es una promesa sino algo probado. `scripts/probar_tests.sh` levanta un PostgreSQL **descartable** (`docker-compose.test.yml`: proyecto aparte, datos en tmpfs, puerto 55432 solo en 127.0.0.1) y lo apaga al terminar; los tests lo leen de `TEST_DATABASE_URL` y **no** de `DATABASE_URL`, porque vacían las tablas en cada caso y no deben poder tocar la BD real. Si falta la BD de prueba, los tests de postgres **fallan** en lugar de saltearse; para correr sin Docker hay que elegirlo explícitamente (`--motores=memoria,sqlite`). El reporte termina con "N passed, 0 skipped" por motor.
 
