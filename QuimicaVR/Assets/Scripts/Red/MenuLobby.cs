@@ -26,6 +26,10 @@ public class MenuLobby : MonoBehaviour
 
     // HUD: los mensajes del reactor y los errores se muestran unos segundos
     float tMensaje = -99, tAviso = -99;
+    // Aviso global del panel web: banner amarillo arriba durante 6 s, en cualquier pantalla
+    const float DuracionAvisoGlobal = 6f;
+    string avisoGlobal = "";
+    float tAvisoGlobal = -99;
     bool mensajeEsError;
     int erroresPrevios;
 
@@ -63,6 +67,20 @@ public class MenuLobby : MonoBehaviour
                 aviso = m.msg ?? "";
                 tAviso = Time.time;
             }
+            if (m.t == "sala_cerrada")
+            {
+                // Lo cerró un administrador desde el panel: sigue conectado, vuelve al lobby
+                pantalla = Pantalla.Salas; listo = false; Red.ListarSalas();
+                aviso = m.motivo ?? "Un administrador cerró la sala";
+                tAviso = Time.time;
+            }
+            if (m.t == "expulsado")
+            {
+                pantalla = Pantalla.Conexion; listo = false;
+                aviso = "Fuiste expulsado por un administrador. Motivo: " + (m.motivo ?? "sin motivo");
+                tAviso = Time.time;
+            }
+            if (m.t == "aviso") { avisoGlobal = m.msg ?? ""; tAvisoGlobal = Time.time; }
             if (m.t == "inicio") { pantalla = Pantalla.Partida; tMensaje = -99; erroresPrevios = 0; }
             if (m.t == "perfil") AlRecibirPerfil(m.perfil);
             if (m.t == "estado")
@@ -107,7 +125,7 @@ public class MenuLobby : MonoBehaviour
         var fuente = GestorPartida.FuenteBase();   // la misma de los textos 3D: tiene "_" y "₂"
         if (fuente != null) GUI.skin.font = fuente;
         GUI.skin.label.fontSize = GUI.skin.button.fontSize = GUI.skin.textField.fontSize = 18;
-        if (pantalla == Pantalla.Partida) { Hud(); return; }
+        if (pantalla == Pantalla.Partida) { Hud(); BannerAvisoGlobal(); return; }
 
         GUILayout.BeginArea(new Rect(Screen.width / 2f - 260, 40, 520, Screen.height - 80), GUI.skin.box);
         GUILayout.Label("<b><size=26>Juego de Química — Demo Multijugador</size></b>", Rico());
@@ -126,6 +144,7 @@ public class MenuLobby : MonoBehaviour
             case Pantalla.EditarPerfil: EditarPerfil(); break;
         }
         GUILayout.EndArea();
+        BannerAvisoGlobal();   // al final: IMGUI dibuja encima lo último
     }
 
     void Conexion()
@@ -394,11 +413,24 @@ public class MenuLobby : MonoBehaviour
         }
     }
 
+    void BannerAvisoGlobal()
+    {
+        if (AvisoGlobal == "") return;
+        var franja = new Rect(0, 0, Screen.width, 56);
+        var antes = GUI.color;
+        GUI.color = new Color(0.96f, 0.83f, 0.25f);   // el mismo amarillo de la paleta (#F5D33F)
+        GUI.DrawTexture(franja, Texture2D.whiteTexture);
+        GUI.color = antes;
+        var estilo = new GUIStyle(Rico()) { alignment = TextAnchor.MiddleCenter };
+        GUI.Label(franja, $"<b><size=22><color=#2a2200>AVISO: {avisoGlobal}</color></size></b>", estilo);
+    }
+
     // ---------- Acciones (las llaman los botones y también PruebaAutomatica) ----------
     // Están separadas del dibujo para que la prueba del build real recorra exactamente
     // el mismo código que un clic, y no una copia que podría comportarse distinto.
     public string PantallaActual => pantalla.ToString();
     public string Aviso => aviso;
+    public string AvisoGlobal => Time.time - tAvisoGlobal < DuracionAvisoGlobal ? avisoGlobal : "";
 
     public void Conectar(string ip, string puerto)
     {

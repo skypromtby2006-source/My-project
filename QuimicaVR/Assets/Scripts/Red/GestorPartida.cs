@@ -62,6 +62,9 @@ public class GestorPartida : MonoBehaviour
                 // y el siguiente "inicio" la tomaba por un reinicio: no se creaban las
                 // cápsulas de los jugadores nuevos (bug B1 de la S2-3).
                 case "fuera": Terminar(); break;
+                // Acciones del panel web: también vuelven al menú
+                case "sala_cerrada": Terminar(); break;
+                case "expulsado": Terminar(); break;
                 case "obj": if (m.objeto != null && esferas.TryGetValue(m.objeto.id, out var e)) e.info = m.objeto; break;
                 case "senal": if (m.objId != null && esferas.TryGetValue(m.objId, out var s)) s.senalHasta = Time.time + duracionSenal; break;
             }

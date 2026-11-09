@@ -56,3 +56,8 @@ logs/
 # ---------- Locales ----------
 # Caché que Unity dejó al crear el proyecto; Jona decidió conservarla, pero no se versiona
 /My project/
+
+# ---------- Panel web (Sprint 3) ----------
+# Contraseña del panel: nunca en git (ver .env.example)
+.env
+panel/node_modules/

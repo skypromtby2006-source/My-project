@@ -23,6 +23,7 @@ El campo `t` indica el tipo de mensaje.
 | `senalar` (solo wizard) | `senal` |
 | `reiniciar` (solo wizard) | `inicio` con la misión nueva |
 | `ping` | `pong` |
+| — (acciones del panel web) | `expulsado`, `sala_cerrada`, `aviso` |
 
 ## Sesión
 
@@ -39,7 +40,7 @@ El campo `t` indica el tipo de mensaje.
 | `t` | Campos | Qué hace | Validaciones del servidor |
 |---|---|---|---|
 | `registro` | `usuario`, `nombre`, `color` | Crear un perfil e iniciar sesión con él | `usuario` se pasa a minúsculas y debe cumplir `^[a-z0-9_]{4,16}$` (no se puede cambiar después); `nombre` de 1 a 20 caracteres; `color` de la *paleta*. Usuario repetido → `"Ese usuario ya existe"` |
-| `login` | `usuario` | Iniciar sesión (sin contraseña: decisión del cliente para la demo) | Debe existir (`"Usuario no encontrado"`) y no tener otra sesión abierta (`"Ese usuario ya tiene una sesión abierta"`) |
+| `login` | `usuario` | Iniciar sesión (sin contraseña: decisión del cliente para la demo) | Debe existir (`"Usuario no encontrado"`), no estar bloqueado desde el panel (`"Cuenta bloqueada: <motivo>"`, Sprint 3) y no tener otra sesión abierta (`"Ese usuario ya tiene una sesión abierta"`) |
 | `perfil_editar` | `nombre`, `color` | Cambiar el nombre visible y el color | Mismas reglas que en `registro`. Si estás en una sala, todos reciben `sala` actualizada |
 | `perfil_ver` | — | Pedir el perfil con el progreso al día | Requiere sesión |
 | `listar` | — | Pedir la lista de salas | — |
@@ -71,6 +72,9 @@ El campo `t` indica el tipo de mensaje.
 | `estado` | `reactor` (símbolos), `errores`, `completada`, `mensaje` | Después de cada `soltar` |
 | `error` | `msg` | Petición rechazada (sala llena, no existe, no eres anfitrión, JSON inválido…) |
 | `pong` | — | Respuesta a `ping` |
+| `expulsado` | `motivo` | **Sprint 3.** Un administrador te expulsó desde el panel web. Justo después el servidor cierra la conexión. El juego vuelve a la pantalla de conexión con el motivo en rojo. Puede volver a entrar (expulsar no es bloquear) |
+| `aviso` | `msg` (máx. 200 caracteres) | **Sprint 3.** Mensaje global del administrador. Llega a **todas** las conexiones, con o sin sesión. El juego lo muestra en una franja amarilla arriba durante 6 s, en cualquier pantalla (también en la partida) |
+| `sala_cerrada` | `motivo` | **Sprint 3.** Un administrador cerró la sala desde el panel. Llega a todos sus jugadores, que siguen conectados y con sesión, y vuelven al lobby con el motivo. Es distinto de `fuera` para que el juego distinga "el Wizard se fue" de "lo cerró un administrador" |
 
 ### Objeto *sala*
 

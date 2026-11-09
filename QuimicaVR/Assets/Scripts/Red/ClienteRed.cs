@@ -72,6 +72,7 @@ using UnityEngine;
 {
     public string t;            // tipo de mensaje
     public string id, nombre, msg;
+    public string motivo;       // en "expulsado" y "sala_cerrada" (acciones del panel web)
     public InfoSala sala;
     public List<InfoSala> lista;
     public InfoMision mision;
@@ -235,6 +236,7 @@ public class ClienteRed : MonoBehaviour
                 case "sala": SalaActual = m.sala; break;
                 case "inicio": SalaActual = m.sala; MisionActual = m.mision; break;
                 case "fuera": SalaActual = null; MisionActual = null; break;
+                case "sala_cerrada": SalaActual = null; MisionActual = null; break;
                 case "obj":
                     m.objeto = JsonUtility.FromJson<MsgObj>(linea).obj;
                     if (MisionActual != null)
@@ -255,6 +257,14 @@ public class ClienteRed : MonoBehaviour
                 case "error": AlError?.Invoke(m.msg); break;
             }
             AlRecibir?.Invoke(m);
+            if (m.t == "expulsado")
+            {
+                // El servidor corta la conexión justo después. Se cierra aquí mismo para
+                // que no llegue además AlDesconectar: su "Se perdió la conexión" taparía
+                // el motivo de la expulsión, que es lo que el jugador tiene que leer.
+                Cerrar();
+                break;
+            }
         }
 
         if (cayoConexion && cliente != null)
@@ -267,6 +277,7 @@ public class ClienteRed : MonoBehaviour
     public void Cerrar()
     {
         try { cliente?.Close(); } catch { }
+        while (entrada.TryDequeue(out _)) { }   // lo que quedara de la conexión anterior ya no vale
         cliente = null;
         SalaActual = null;
         MisionActual = null;

@@ -1,0 +1,10 @@
+# El contexto de build es la raíz del repo (para compilar panel/ y copiar servidor/).
+# Sin esto Docker mandaría QuimicaVR/Library y los builds: gigas en cada build.
+*
+!servidor/
+!panel/
+servidor/tests/
+servidor/__pycache__/
+servidor/.pytest_cache/
+panel/node_modules/
+panel/dist/

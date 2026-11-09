@@ -6,7 +6,8 @@ la prueba S2-3 aunque esos tests dieran TODO OK. Aquí cada "jugador Unity" es e
 ejecutable de Build/Linux en -batchmode, manejado por PruebaAutomatica.cs (los mismos
 métodos que los botones), y los demás jugadores son bots.
 Uso:  python probar_build.py [escenario ...]   (sin argumentos: todos)
-Escenarios: wizard, player, sesion, reinicio, progreso (los dos últimos reinician el servidor)
+Escenarios: wizard, player, sesion, reinicio, progreso (los dos últimos reinician el servidor),
+panel (acciones del panel web: necesita ADMIN_PASSWORD en el .env)
 """
 import asyncio
 import json
@@ -17,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import urllib.request
 import uuid
 
 RAIZ = pathlib.Path(__file__).resolve().parent.parent
@@ -351,8 +353,74 @@ async def escenario_progreso(s):
     await p.esperar("FIN")
 
 
+def panel(ruta, datos=None, token=None):
+    """Llama a la API del panel web (solo biblioteca estándar, como el resto del script)."""
+    pedido = urllib.request.Request(f"http://{IP}:8000/api{ruta}", method="POST" if datos is not None else "GET",
+                                    data=json.dumps(datos).encode() if datos is not None else None,
+                                    headers={"Content-Type": "application/json",
+                                             **({"Authorization": f"Bearer {token}"} if token else {})})
+    with urllib.request.urlopen(pedido, timeout=10) as r:
+        return json.loads(r.read())
+
+
+def clave_admin():
+    for linea in (RAIZ / ".env").read_text(encoding="utf-8").splitlines():
+        if linea.startswith("ADMIN_PASSWORD="):
+            return linea.split("=", 1)[1].strip()
+    raise RuntimeError("falta ADMIN_PASSWORD en el .env")
+
+
+async def escenario_panel(s):
+    """S3-4: el juego real reacciona a las acciones del panel: aviso global, cierre de sala,
+    expulsión y cuenta bloqueada, mostrando siempre el texto que mandó el admin."""
+    u = f"pp_{s}"  # prefijos propios: "progreso" ya usa p_ y w_ en la misma corrida
+    p = Build("panel_p", ["conectar", f"registro|{u}|Pepa|#4FE07A", "esperar_pantalla|Salas",
+                          "unirse_codigo|codigo_panel", "listo", "esperar_pantalla|Partida", "marca|jugando",
+                          "esperar_aviso_global|Hola desde el panel", "reporte|aviso",
+                          "esperar_aviso|Fin de la clase", "reporte|cerrada",
+                          "esperar_aviso|Prueba automática", "reporte|expulsado",
+                          "esperar_senal|bloqueado", "conectar", f"login|{u}", "esperar_aviso|Cuenta bloqueada",
+                          "reporte|bloqueado", "fin"])
+    w = await Bot.nuevo(f"pw_{s}", "Wiz")
+    try:
+        sala = await w.crear_sala("codigo_panel")
+        await w.esperar_sala_lista()
+        await w.env(t="iniciar")
+        await p.esperar("MARCA jugando")
+        datos = {"usuario": "admin", "contrasena": clave_admin()}
+        token = (await asyncio.to_thread(panel, "/login", datos))["token"]
+        print("El admin manda un aviso global en plena partida")
+        await asyncio.to_thread(panel, "/aviso", {"mensaje": "Hola desde el panel"}, token)
+        r = await p.esperar("REPORTE aviso")
+        comprobar(r["pantalla"] == "Partida" and "Hola desde el panel" in (r["aviso_global"] or ""),
+                  "el aviso global aparece en la partida", r)
+        print("El admin cierra la sala desde el panel")
+        await asyncio.to_thread(panel, f"/salas/{sala}/cerrar", {"motivo": "Fin de la clase"}, token)
+        r = await p.esperar("REPORTE cerrada")
+        comprobar(r["pantalla"] == "Salas", "con sala_cerrada el juego vuelve al lobby", r)
+        comprobar("Fin de la clase" in (r["aviso"] or ""), "y muestra el motivo", r)
+        print("El admin expulsa al jugador desde el panel")
+        estado = await asyncio.to_thread(panel, "/estado", None, token)
+        jid = next(j["id"] for j in estado["jugadores"] if j["usuario"] == u)
+        await asyncio.to_thread(panel, f"/jugadores/{jid}/expulsar", {"motivo": "Prueba automática"}, token)
+        r = await p.esperar("REPORTE expulsado")
+        comprobar(r["pantalla"] == "Conexion", "con expulsado el juego vuelve a la pantalla de conexión", r)
+        comprobar("expulsado" in (r["aviso"] or "") and "Prueba automática" in (r["aviso"] or ""),
+                  "y muestra el motivo (no 'Se perdió la conexión')", r)
+        print("El admin bloquea la cuenta y el jugador intenta volver a entrar")
+        await asyncio.to_thread(panel, f"/usuarios/{u}/bloquear", {"motivo": "Prueba de bloqueo"}, token)
+        senal("bloqueado")
+        r = await p.esperar("REPORTE bloqueado")
+        comprobar(r["pantalla"] == "Perfil" and "Cuenta bloqueada: Prueba de bloqueo" in (r["aviso"] or ""),
+                  "una cuenta bloqueada no puede iniciar sesión y ve el motivo", r)
+        await p.esperar("FIN")
+    finally:
+        w.cerrar()
+
+
 ESCENARIOS = {"wizard": escenario_wizard, "player": escenario_player,
-              "sesion": escenario_sesion, "reinicio": escenario_reinicio, "progreso": escenario_progreso}
+              "sesion": escenario_sesion, "reinicio": escenario_reinicio, "progreso": escenario_progreso,
+              "panel": escenario_panel}
 
 
 async def main():

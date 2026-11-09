@@ -15,17 +15,26 @@ services:
       retries: 10
 
   servidor:
-    build: ./servidor
+    # Contexto en la raíz: la imagen también compila el panel web (panel/)
+    build:
+      context: .
+      dockerfile: servidor/Dockerfile
     container_name: quimica_servidor
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
+    # ADMIN_USER, ADMIN_PASSWORD y JWT_SECRET del panel. required: false para que
+    # sin .env el juego arranque igual (el panel queda deshabilitado y lo avisa en el log)
+    env_file:
+      - path: .env
+        required: false
     environment:
       PUERTO: "7777"
       DATABASE_URL: postgresql://quimica:quimica123@db:5432/quimica
     ports:
       - "7777:7777"
+      - "8000:8000"   # panel web de administración
 
   # Panel web para inspeccionar la BD. Va en el perfil "admin" para que la demo
   # normal (docker compose up) no lo arranque: no hace falta para jugar y suma
