@@ -98,11 +98,19 @@ El servidor lo carga, sortea los números y lo envía en `inicio`. El cliente **
 | 🟢 | Sonido (puertas, cadenas, burbujeo) · animación de las puertas · pitch visible en el otro jugador |
 
 ## 6. Pendiente de antes (lunes 09)
-- `server.py` ~800: atrapar `UnicodeDecodeError`/`ValueError` además de `JSONDecodeError`. Registrar `WARNING` "Datos no válidos desde <ip>" y cerrar esa conexión. Test con bytes binarios. Commit `fix:`.
+- [x] `server.py` ~800: atrapar `UnicodeDecodeError`/`ValueError` además de `JSONDecodeError`. Registrar `WARNING` "Datos no válidos desde <ip>" y cerrar esa conexión. Test con bytes binarios. Commit `fix:`.
+
+## 6.1 Servidor local en un solo `.exe` (🟡, PM 09/11 — después de cerrar S4-2)
+> Para una PC sin Docker (el docente, o la prueba en Windows): un servidor local que se abre con doble clic. El servidor dedicado (Docker + PostgreSQL) sigue siendo la opción recomendada para varios equipos.
+- [ ] **Persistencia SQLite:** si no hay `DATABASE_URL`, usar `quimica.db` (SQLite) junto al ejecutable en vez de memoria. Mismas tablas y mismas consultas del panel. Solo en memoria si SQLite falla. Misma batería de tests de perfiles/progreso contra SQLite.
+- [ ] **PyInstaller (modo carpeta, NO onefile):** `QuimicaServidor.exe` con el servidor del juego + API + `panel/dist`. Al arrancar: mostrar IPs, puerto del juego y URL del panel, y abrir el navegador en `localhost:8000`. Sin `.env`, generar una contraseña de admin al azar, mostrarla y guardarla en `admin.txt`.
+- [ ] **GitHub Actions (windows-latest):** en cada tag `v*`, construir el `.exe` del servidor y subirlo como artefacto. El juego se sigue construyendo con Unity en Arch.
+- [ ] **`empaquetar.sh`:** zip con `Servidor/` (exe) + `Juego/` (build de Windows) + un LEEME de dos pasos (abrir servidor, abrir juego). Docker documentado como la opción de "servidor dedicado".
+- [ ] **`docs/decisiones.md`:** servidor dedicado (Docker + PostgreSQL) vs servidor local (exe + SQLite), y por qué.
 
 ## 7. Fases y criterios de terminado
 - **S4-1:** `pytest` en verde, con un test por sala que la recorra entera (respuestas correctas y una incorrecta por concepto) y con la ventana de 2 s de las palancas. `probar_perfiles` sigue en verde. Reporte.
-- **S4-2:** cero `error CS`, el nivel greybox se genera desde el JSON y `probar_build.sh` recorre las 5 salas con dos bots. Build de Linux. Reporte + **guion de prueba** en `docs/pruebas/s4-greybox.md`.
+- **S4-2 (✅ cerrada):** cero `error CS`, el nivel greybox se genera desde el JSON, build de Linux generado y `probar_build.sh laberinto` en verde contra el build real, con el **door-cross físico** (puerta cerrada bloquea; al abrirse, deja pasar) y la cobertura B1/B2/B4 migrada al laberinto. El recorrido completo de las 5 salas por protocolo lo cubre `test_laberinto.py` (`pytest`). Reporte + **guion de prueba** en `docs/pruebas/s4-greybox.md`.
 - **S4-3 (🧑):** jugar el nivel completo en pareja (dos ventanas) y anotar qué sala aburre, cuál confunde y cuál es demasiado fácil. 🤖 ajusta los números o las tareas.
 - **S4-4:** assets e iluminación aplicados; 🧑 aprueba con capturas de cada sala. Rendimiento ≥ 60 FPS en la PC de Jona (mostrar FPS con F3).
 - **S4-5:** prueba integral con el panel abierto (estadísticas por concepto), build de Linux y Windows, merge, tag `v0.5-demo` y reporte final.
