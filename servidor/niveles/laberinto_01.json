@@ -1,0 +1,120 @@
+{
+  "id": "laberinto_01",
+  "nombre": "Laberinto de las 5 puertas",
+  "version": "0.5-s4-1",
+  "_grillas": "Greybox: layout mínimo de 5 salas en fila. Símbolos: # pared, . piso, D puerta, M montacargas, P palanca, C consola, S aparición, | muro central con reja. Se refina en S4-2 (día del greybox). El servidor NO interpreta la geometría: solo la reenvía en 'inicio' y el cliente arma el nivel con GeneradorNivel.cs.",
+  "muro_central": { "reja": true, "_nota": "Separa el lado Wizard (izquierda) del Player (derecha). Nunca se cruza; se ven por rejas y se pasan objetos por el montacargas (M)." },
+  "lados": {
+    "wizard": {
+      "aparicion": [2, 1],
+      "grilla": [
+        "#####################",
+        "#.S.#C..#C..#C..#C..#",
+        "#..PD..PD..PD..PD..P#",
+        "#.M.#.M.#.M.#.M.#.M.#",
+        "#####################"
+      ]
+    },
+    "player": {
+      "aparicion": [18, 1],
+      "grilla": [
+        "#####################",
+        "#..C#..C#..C#..C#.S.#",
+        "#P..DP..DP..DP..DP..#",
+        "#.M.#.M.#.M.#.M.#.M.#",
+        "#####################"
+      ]
+    }
+  },
+  "ventana_palanca_s": 2.0,
+  "_sorteo": "Los números los sortea el servidor (nivel.sortear). n = mol de agua base, SIEMPRE múltiplo de 6 para que las 5 salas den enteros a la vez. Los rangos de abajo son informativos; la fuente es nivel.py.",
+  "sorteo": { "base_n_opciones": [6, 12, 18, 24], "rendimiento_pct_opciones": [60, 70, 75, 80, 90] },
+  "salas": [
+    {
+      "n": 1,
+      "nombre": "El Pozo",
+      "ambientacion": "mazmorra azul, antorchas",
+      "luz": "#2E5FA8",
+      "reaccion": "2 H2 + O2 -> 2 H2O",
+      "concepto": "balanceo",
+      "wizard_tiene": ["diales de los reactivos", "tanques de H2"],
+      "player_tiene": ["dial del producto", "tanques de O2", "cuantas moleculas de H2O pide la puerta"],
+      "produce": "agua",
+      "consolas": {
+        "wizard": [{ "id": "dial_h2", "tipo": "dial", "pos": [1, 1], "controla": "H2_mol" }],
+        "player": [{ "id": "dial_o2", "tipo": "dial", "pos": [19, 1], "controla": "O2_mol" }]
+      },
+      "montacargas": { "id": "mont_1", "pos": [2, 3], "envia": "agua_mol" },
+      "puerta": { "id": "D1", "palanca_wizard": [3, 2], "palanca_player": [17, 2] }
+    },
+    {
+      "n": 2,
+      "nombre": "Puente de cadenas",
+      "ambientacion": "puentes sobre acido verde",
+      "luz": "#3FB24F",
+      "reaccion": "2 Na + 2 H2O -> 2 NaOH + H2",
+      "concepto": "mol",
+      "wizard_tiene": ["cristales de Na (elige cuantos)"],
+      "player_tiene": ["el agua de la sala 1 (llega por el montacargas)", "la tabla de proporciones"],
+      "produce": "NaOH y H2",
+      "consolas": {
+        "wizard": [{ "id": "dial_na", "tipo": "dial", "pos": [5, 1], "controla": "Na_mol" }],
+        "player": [{ "id": "tabla_prop", "tipo": "lectura", "pos": [15, 1] }]
+      },
+      "montacargas": { "id": "mont_2", "pos": [6, 3], "envia": "naoh_mol" },
+      "puerta": { "id": "D2", "palanca_wizard": [7, 2], "palanca_player": [13, 2] }
+    },
+    {
+      "n": 3,
+      "nombre": "Laboratorio de tanques",
+      "ambientacion": "tanques verdes, vapor",
+      "luz": "#2FA06A",
+      "reaccion": "NaOH + HCl -> NaCl + H2O",
+      "concepto": "masa",
+      "wizard_tiene": ["tabla de masas molares", "balanza"],
+      "player_tiene": ["el tanque de HCl indica sus gramos", "valvula de NaOH"],
+      "produce": "NaCl (llave de sal)",
+      "consolas": {
+        "wizard": [{ "id": "balanza", "tipo": "balanza", "pos": [9, 1], "responde": "nacl_g" }],
+        "player": [{ "id": "valvula_naoh", "tipo": "valvula", "pos": [11, 1] }]
+      },
+      "montacargas": { "id": "mont_3", "pos": [10, 3], "envia": "nacl_mol" },
+      "puerta": { "id": "D3", "palanca_wizard": [11, 2], "palanca_player": [9, 2] }
+    },
+    {
+      "n": 4,
+      "nombre": "Reactor de Haber",
+      "ambientacion": "sala de maquinas, rojo",
+      "luz": "#B23A2E",
+      "reaccion": "N2 + 3 H2 -> 2 NH3",
+      "concepto": "limitante",
+      "wizard_tiene": ["el H2 que llego de la sala 2 (cantidad limitada)"],
+      "player_tiene": ["N2 en abundancia", "dial: cuantos mol de NH3 salen"],
+      "produce": "NH3 (combustible del porton)",
+      "consolas": {
+        "wizard": [{ "id": "tanque_h2", "tipo": "lectura", "pos": [13, 1] }],
+        "player": [{ "id": "dial_nh3", "tipo": "dial", "pos": [7, 1], "controla": "nh3_mol" }]
+      },
+      "montacargas": { "id": "mont_4", "pos": [14, 3], "envia": "nh3_mol" },
+      "puerta": { "id": "D4", "palanca_wizard": [15, 2], "palanca_player": [5, 2] }
+    },
+    {
+      "n": 5,
+      "nombre": "El Porton final",
+      "ambientacion": "cripta, calavera de cristal",
+      "luz": "#C9A227",
+      "reaccion": "CH4 + 2 O2 -> CO2 + 2 H2O",
+      "concepto": "rendimiento",
+      "wizard_tiene": ["masa teorica (tiene que calcularla)"],
+      "player_tiene": ["masa real que muestra el horno"],
+      "produce": "fin del nivel",
+      "_ajuste_pendiente": "El combustible que llega de la sala 4 es NH3, no CH4. Encadenamiento quimico roto: ver docs/reportes/fase-s4-1.md, decide el cliente.",
+      "consolas": {
+        "wizard": [{ "id": "consola_teorica", "tipo": "entrada", "pos": [17, 1], "responde": "teorica_g" }],
+        "player": [{ "id": "horno", "tipo": "lectura", "pos": [5, 1], "muestra": "real_g" }]
+      },
+      "montacargas": null,
+      "puerta": { "id": "D5", "palanca_wizard": [19, 2], "palanca_player": [3, 2], "_nota": "porton final: fin del nivel" }
+    }
+  ]
+}

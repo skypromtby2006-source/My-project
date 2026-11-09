@@ -185,3 +185,35 @@ Las tablas se crean con `CREATE TABLE IF NOT EXISTS` al arrancar el servidor y n
 El perfil guarda **solo** usuario, nombre visible y color: los usuarios son estudiantes de secundaria, en su mayoría menores de edad (minimización de datos).
 
 Si la BD no está disponible (o en el Plan B2, sin Docker), el servidor sigue funcionando en memoria, **perfiles y progreso incluidos**, pero se pierden al cerrarlo; lo avisa con un `WARNING` al arrancar. En una demo en vivo no debe caerse todo por la base de datos.
+
+## Borrador Sprint 4 — Laberinto de las 5 puertas (aún no implementado en server.py ni en C#)
+
+> Diseño del protocolo nuevo (SPRINT4 §3.2). Se documenta ahora, en S4-1, pero se
+> **implementa en ambos lados en S4-1/S4-2**. Hasta entonces convive con el
+> protocolo del laberinto; la misión "Sintetizar agua" se retira (la reemplaza la Sala 1).
+
+El servidor valida **todo**; el cliente solo manda intenciones. El nivel y los números
+viven en `servidor/niveles/laberinto_01.json` + `servidor/nivel.py` (ver reporte S4-1).
+
+Del cliente al servidor (durante la partida):
+
+| Mensaje | Significado |
+|---|---|
+| `{"t":"interactuar","obj":"valvula_naoh","accion":"abrir"}` | Usar un objeto del lado propio (válvula, montacargas, etc.) |
+| `{"t":"dial","consola":"dial_h2","valor":6}` | Fijar un dial (el servidor valida contra el sorteo) |
+| `{"t":"montacargas","obj":"nacl"}` | Pasar el producto por la ventanilla del muro central a la sala siguiente |
+| `{"t":"palanca","puerta":"D1"}` | Bajar la palanca del lado propio. La puerta abre solo si las dos bajan con < 2 s de diferencia |
+| `{"t":"pos","x":0,"y":0,"z":0,"ry":0,"pitch":0}` | `pos` agrega `pitch` (inclinación de la cabeza) para ver hacia dónde mira el otro |
+
+Del servidor al cliente:
+
+| Mensaje | Significado |
+|---|---|
+| `{"t":"sala_estado","sala":1,"puertas":{"D1":"abierta"},"objetos":{...},"mensaje":"..."}` | Estado de la sala tras cada intento válido |
+
+Eventos nuevos en la tabla `eventos` (para las estadísticas por concepto con pandas):
+
+- `error_estequiometria {sala, concepto, esperado, recibido, usuario}` — concepto ∈ {balanceo, mol, masa, limitante, rendimiento}.
+- `sala_completada {sala, segundos, errores}`.
+
+Progreso del perfil en el laberinto: **nivel completado**, mejor tiempo y tiempo por sala.
