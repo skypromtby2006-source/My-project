@@ -1,0 +1,59 @@
+# Construye el servidor local (QuimicaServidor.exe, PyInstaller en modo carpeta) en
+# Windows, lo prueba desde el zip con scripts/probar_paquete.sh y lo sube como artefacto.
+# El juego NO se construye aquí: se sigue construyendo con Unity en Arch.
+#
+# Descargar el resultado:  gh run download -R skypromtby2006-source/My-project -n QuimicaServidor_Windows -D dist/
+#   -> deja dist/QuimicaServidor/QuimicaServidor.exe, que es lo que usa scripts/empaquetar.sh
+name: Servidor local (.exe)
+
+on:
+  push:
+    tags: ["v*"]                 # cada versión (los filtros de paths no aplican a los tags)
+    branches: ["sprint-4"]       # y mientras se desarrolla, cuando cambia el servidor o el panel
+    paths:
+      - "servidor/**"
+      - "panel/**"
+      - "scripts/probar_paquete.sh"
+      - ".github/workflows/servidor-exe.yml"
+  workflow_dispatch:
+
+jobs:
+  exe:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: panel/package-lock.json
+      - name: Compilar el panel (panel/dist va dentro del .exe)
+        run: cd panel && npm ci --no-audit --no-fund && npm run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"   # la misma que la imagen de Docker
+          cache: pip
+          cache-dependency-path: servidor/requirements*.txt
+      - name: Instalar dependencias
+        run: python -m pip install -r servidor/requirements-exe.txt
+
+      - name: PyInstaller
+        run: pyinstaller servidor/quimica_servidor.spec --noconfirm --distpath dist --workpath build_pyi
+
+      - name: Prueba de humo desde el zip (probar_paquete.sh exe)
+        run: |
+          cd dist && python -m zipfile -c ../QuimicaServidor_Windows.zip QuimicaServidor && cd ..
+          scripts/probar_paquete.sh QuimicaServidor_Windows.zip exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QuimicaServidor_Windows
+          path: dist/                # dentro: QuimicaServidor/QuimicaServidor.exe + _internal/
+          if-no-files-found: error
+          retention-days: 90
