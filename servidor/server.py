@@ -804,6 +804,12 @@ async def cliente(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                 log.warning("JSON inválido de %s (%s): %r", j.id, j.nombre, linea[:120].decode("utf-8", "replace"))
                 await j.enviar({"t": "error", "msg": "JSON inválido"})
                 continue
+            except (UnicodeDecodeError, ValueError):
+                # No es texto JSON: suele ser un navegador o un escáner de puertos que
+                # pega en el puerto del juego. No se puede responder nada útil, así que
+                # se corta la conexión en vez de seguir leyendo basura binaria.
+                log.warning("Datos no válidos desde %s (¿navegador o escáner en el puerto del juego?)", j.ip)
+                break
             try:
                 await manejar(j, m)
             except Exception:

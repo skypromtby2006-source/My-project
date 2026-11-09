@@ -314,3 +314,19 @@ async def test_bloquear_impide_el_login_y_expulsa_si_esta_conectado(api, h, serv
     assert filas[1]["detalle"] == {"motivo": "Insultos en el chat", "expulsado": True}
     assert (await api.post("/api/usuarios/nadie/bloquear", headers=h, json={"motivo": "x"})).status_code == 404
     assert (await api.post("/api/usuarios/ana_test/bloquear", headers=h, json={"motivo": ""})).status_code == 422
+
+
+# ----------------------------------------------------------------- basura binaria en el puerto del juego
+async def test_bytes_binarios_no_tumban_al_servidor(servidor_juego, bot, caplog):
+    # Un navegador o un escáner de puertos manda bytes que no son UTF-8 ni JSON.
+    r, w = await asyncio.open_connection("127.0.0.1", servidor_juego)
+    w.write(b"\xff\xfe\x00\x01GET / HTTP/1.1\x80\x81\n")
+    await w.drain()
+    with caplog.at_level(logging.WARNING):
+        # El servidor cierra esa conexión: readline() devuelve vacío.
+        assert await asyncio.wait_for(r.readline(), 3) == b""
+    w.close()
+    assert any("Datos no válidos desde" in m for m in caplog.messages)
+    # Y sigue vivo: un jugador legítimo entra normal después de la basura.
+    a = await bot(servidor_juego, "ana_test", nombre="Ana")
+    assert a.id
