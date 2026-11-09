@@ -1,31 +1,18 @@
 """
-Tests de la capa de datos (`repositorio.py`) contra los DOS motores: SQLite siempre, y
-PostgreSQL cuando hay una BD de prueba (variable DATABASE_URL, p. ej. la de Docker).
-Prueban que las MISMAS consultas dan el mismo resultado en ambos.
+Tests de la capa de datos (`repositorio.py`) contra los DOS motores con SQL: SQLite y
+PostgreSQL (ver conftest.py: TEST_DATABASE_URL). Prueban que las MISMAS consultas dan
+el mismo resultado en ambos. El modo memoria no tiene SQL, así que no aplica aquí.
 """
-import os
-import pathlib
-import sys
-
 import pytest_asyncio
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+import server
 
-import repositorio  # noqa: E402
-
-MOTORES = ["sqlite"] + (["postgres"] if os.getenv("DATABASE_URL") else [])
+MOTORES = ("sqlite", "postgres")
 
 
-@pytest_asyncio.fixture(params=MOTORES)
-async def repo(request):
-    if request.param == "sqlite":
-        r = repositorio.abrir_sqlite(":memory:")
-    else:
-        r = await repositorio.abrir_postgres(os.getenv("DATABASE_URL"))
-    await r.crear_esquema()
-    await r.vaciar_todo()
-    yield r
-    await r.cerrar()
+@pytest_asyncio.fixture
+async def repo(motor):
+    return server.db
 
 
 async def test_crear_y_buscar_usuario(repo):

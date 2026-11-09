@@ -13,6 +13,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 import nivel   # noqa: E402
 import server  # noqa: E402
+from conftest import esperar, eventos, misiones  # noqa: E402
 
 
 def otro_lado(lado: str) -> str:
@@ -34,7 +35,7 @@ async def iniciar_laberinto(bot, servidor_juego):
     sala = (await w.rec("sala"))["sala"]
     await p.env(t="unirse", sala_id=sala["id"])
     await p.rec("sala")
-    await p.env(t="listo", valor=True)
+    await p.listo(w)
     await w.env(t="iniciar", modo="laberinto")
     await w.rec("inicio")
     await p.rec("inicio")
@@ -79,12 +80,13 @@ async def test_recorrer_las_5_salas_abre_el_porton(servidor_juego, bot):
         await resolver_sala(w, p, bots, partida)
     assert partida.completada
 
-    tipos = [e["tipo"] for e in server.eventos_mem]
+    # el progreso del Player quedó guardado como "laberinto" (es lo último que se guarda)
+    async def guardado():
+        return any(x["usuario"] == "play_test" and x["mision"] == "laberinto" for x in await misiones())
+    await esperar(guardado)
+    tipos = [e["tipo"] for e in await eventos()]
     assert tipos.count("sala_completada") == 5
     assert "nivel_completado" in tipos
-    # el progreso del Player quedó guardado como "laberinto"
-    assert any(x["usuario"] == "play_test" and x["mision"] == "laberinto"
-               for x in server.misiones_mem)
 
 
 # ----------------------------------------------------------------- un error por concepto
@@ -97,7 +99,7 @@ async def test_un_error_por_concepto_y_la_puerta_no_abre_con_la_parte_mal(servid
         malo = val + 1  # un valor incorrecto para ese concepto
 
         await set_dial(bots, partida, cid, malo)
-        err = [e for e in server.eventos_mem if e["tipo"] == "error_estequiometria"][-1]
+        err = (await eventos("error_estequiometria"))[-1]
         assert err["detalle"]["concepto"] == concepto and err["detalle"]["sala"] == num
         assert err["detalle"]["recibido"] == malo and err["detalle"]["esperado"] == val
 
@@ -111,8 +113,7 @@ async def test_un_error_por_concepto_y_la_puerta_no_abre_con_la_parte_mal(servid
         assert partida.sala_num == esperado
 
     assert partida.completada
-    conceptos = {e["detalle"]["concepto"] for e in server.eventos_mem
-                 if e["tipo"] == "error_estequiometria"}
+    conceptos = {e["detalle"]["concepto"] for e in await eventos("error_estequiometria")}
     assert conceptos == set(nivel.CONCEPTOS)
 
 

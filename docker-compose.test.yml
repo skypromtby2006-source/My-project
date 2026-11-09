@@ -1,0 +1,20 @@
+# PostgreSQL DESCARTABLE para la batería de tests (scripts/probar_tests.sh).
+# Va en su propio proyecto de compose (quimica_test) y sin volumen: los datos viven en
+# tmpfs y desaparecen con "down". Así los tests, que vacían las tablas en cada caso,
+# nunca pueden tocar la BD real del servidor (servicio db de docker-compose.yml).
+services:
+  db_test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: quimica_test
+      POSTGRES_PASSWORD: quimica_test
+      POSTGRES_DB: quimica_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    ports:
+      # Solo en 127.0.0.1 y en otro puerto: no choca con un PostgreSQL local ni se ve desde la red
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quimica_test -d quimica_test"]
+      interval: 1s
+      retries: 30
