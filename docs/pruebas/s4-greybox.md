@@ -27,7 +27,8 @@
 | # | Qué hacer | Resultado esperado |
 |---|---|---|
 | 1 | Al iniciar, mirar alrededor en primera persona y caminar | Cada uno aparece en **su** lado del muro central. Se ven las paredes, el piso y, al otro lado del muro, la cápsula del otro con su nombre y una "cabeza" que **gira cuando el otro mira** (pitch) |
-| 2 | **Sala 1 (balanceo)** `2H₂+O₂→2H₂O`. El HUD dice cuántos mol de H₂O pide la puerta. A ajusta `dial_h2`, B ajusta `dial_o2` con los coeficientes correctos | Con los dos valores bien y las **dos palancas** (`D1_w` y `D1_p`) bajadas con < 2 s de diferencia, la puerta **D1 se pone verde**. Si la baja uno solo, o un valor está mal, **no abre** y el HUD avisa |
+| 1b | Antes de resolver la Sala 1, **caminar contra la puerta D1 (roja)** y contra el **muro central** | **No se puede pasar:** la puerta cerrada y el muro bloquean físicamente. Al otro lado se ve por el hueco, pero no se cruza |
+| 2 | **Sala 1 (balanceo)** `2H₂+O₂→2H₂O`. El HUD dice cuántos mol de H₂O pide la puerta. A ajusta `dial_h2`, B ajusta `dial_o2` con los coeficientes correctos | Con los dos valores bien y las **dos palancas** (`D1_w` y `D1_p`) bajadas con < 2 s de diferencia, la puerta **D1 se abre** (se pone verde y baja: ahora **sí se puede cruzar**). Si la baja uno solo, o un valor está mal, **no abre** ni deja pasar, y el HUD avisa |
 | 3 | Probar a propósito un valor **incorrecto** en una consola | El HUD muestra el mensaje de error del concepto y la puerta no abre. (En el panel queda un `error_estequiometria`, se ve en S4-5) |
 | 4 | **Sala 2 (mol)** `2Na+2H₂O→2NaOH+H₂`. El HUD de B muestra el agua que llegó de la Sala 1. A pone los mol de `dial_na` | Abren D2 con la relación mol a mol correcta y las dos palancas. El agua de la sala anterior es la que se usa (encadenamiento) |
 | 5 | **Sala 3 (masa)** `NaOH+HCl→NaCl+H₂O`. B usa la **válvula** (`valvula_naoh`, E) y A pone en la **balanza** los gramos de NaCl | La puerta solo abre si además de las dos palancas, la válvula fue abierta y la balanza tiene el valor correcto (gramos con 1 decimal; masa molar del Cl = 35,5) |
@@ -38,7 +39,7 @@
 | 10 | Al terminar el nivel, salir al lobby y volver a entrar a una sala nueva | Se puede arrancar otro laberinto desde cero (números nuevos sorteados por el servidor) |
 | 11 | Anotar, por sala: **¿aburre? ¿confunde? ¿es demasiado fácil?** | Es la entrada de S4-3: 🤖 ajusta números o tareas según lo que Jona reporte |
 
-**Esperado y no es un fallo (greybox):** las puertas no bloquean físicamente el paso (son visuales: rojas/verdes); el bloqueo físico y el arte llegan en S4-4. Los números de la sala se leen en el HUD, no todavía en la cara de cada consola.
+**Esperado y no es un fallo (greybox):** todo son cubos grises sin textura ni luz (arte en S4-4). Las puertas **sí bloquean** (regla del juego, no arte): rojas = cerradas (no se pasa), verdes y bajas = abiertas. Los números de la sala se leen en el HUD, no todavía en la cara de cada consola.
 
 ## Resultado
 | Fecha | Build (commit) | Quién | Resultado | Notas por sala (aburre/confunde/fácil) |

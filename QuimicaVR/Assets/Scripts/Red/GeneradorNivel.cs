@@ -77,12 +77,13 @@ public class GeneradorNivel
                          new Vector3(CELDA, .1f, CELDA), PISO);
                     if (ch == 'D')
                     {
-                        // Puerta (visual en greybox): el bloqueo físico es pulido de S4-4.
-                        // Se numeran de izquierda a derecha ~ salas 1..5 para abrirlas al avanzar.
-                        var go = Cubo($"puerta_{lado}_{c}", Mundo(lado, c, r, 1.2f),
-                                      new Vector3(CELDA * .9f, 2.4f, .3f), PUERTA_CERRADA);
-                        int sala = puertas.Count / 2 + 1;   // 2 lados por puerta
-                        puertas.Add((sala, go));
+                        // Puerta: cubo SÓLIDO que llena el hueco de la pared (bloquea de
+                        // verdad). El collider se desactiva cuando sala_estado la marca
+                        // abierta (AbrirHasta). Es regla del juego, no arte.
+                        // La sala se deduce de la columna (las puertas están en col 4,8,12,16).
+                        var go = Cubo($"puerta_{lado}_{c}", Mundo(lado, c, r, ALTO_PARED / 2),
+                                      new Vector3(CELDA, ALTO_PARED, CELDA), PUERTA_CERRADA);
+                        puertas.Add((c / 4, go));
                     }
                 }
             }
@@ -125,13 +126,19 @@ public class GeneradorNivel
         if (fuente != null) { etiqueta.font = fuente; etiqueta.GetComponent<MeshRenderer>().material = fuente.material; }
     }
 
-    // Abre (pinta de verde) las puertas de las salas ya completadas.
+    // Abre las puertas de las salas ya completadas: desactiva su collider (deja pasar)
+    // y la baja/pinta de verde. Las cerradas siguen bloqueando.
     public void AbrirHasta(int salaActual, bool nivelCompleto)
     {
         foreach (var (sala, go) in puertas)
         {
             if (go == null) continue;
             bool abierta = nivelCompleto || sala < salaActual;
+            var col = go.GetComponent<Collider>();
+            if (col != null) col.enabled = !abierta;    // abierta -> no bloquea
+            float alto = abierta ? .4f : ALTO_PARED;    // abierta -> baja, como una reja levantada
+            go.transform.localScale = new Vector3(CELDA, alto, CELDA);
+            var p = go.transform.position; p.y = alto / 2f; go.transform.position = p;
             Pintar(go, abierta ? PUERTA_ABIERTA : PUERTA_CERRADA);
         }
     }
