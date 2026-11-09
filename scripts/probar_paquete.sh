@@ -133,6 +133,11 @@ detener_exe() {  # SIGTERM a todo proceso de ese ejecutable; si en 10 s no sali�
 
 probar_exe() {
   local exe="$1" dir; dir="$(dirname "$exe")"
+  if [[ "$exe" == *.exe ]] && ! $WINDOWS; then
+    echo "ERROR: $(basename "$exe") es de Windows y no corre aquí. Prueba solo el paquete Docker"
+    echo "  (probar_paquete.sh <zip> docker); el .exe lo prueba GitHub Actions en windows-latest."
+    return 1
+  fi
   echo; echo "=== Servidor local (PyInstaller): $exe"
   [ ! -e "$dir/admin.txt" ] && [ ! -e "$dir/quimica.db" ] || { echo "ERROR: el paquete trae admin.txt o quimica.db (datos de otra PC)"; return 1; }
   local juego=17777 panel=18000
@@ -178,6 +183,11 @@ probados=0
 if [ "$QUE" = docker ] || { [ "$QUE" = todo ] && [ -n "$DOCKER_DIR" ]; }; then
   [ -n "$DOCKER_DIR" ] || { echo "ERROR: el zip no trae ServidorDedicado/"; exit 1; }
   probar_docker "$DOCKER_DIR"; probados=$((probados + 1))
+fi
+if [ "$QUE" = todo ] && [[ "$EXE" == *.exe ]] && ! $WINDOWS; then
+  echo; echo "NOTA: el zip trae $(basename "$EXE"), que solo corre en Windows: aquí NO se prueba"
+  echo "      (lo prueba GitHub Actions en windows-latest antes de subirlo)."
+  EXE=""
 fi
 if [ "$QUE" = exe ] || { [ "$QUE" = todo ] && [ -n "$EXE" ]; }; then
   [ -n "$EXE" ] || { echo "ERROR: el zip no trae QuimicaServidor(.exe)"; exit 1; }

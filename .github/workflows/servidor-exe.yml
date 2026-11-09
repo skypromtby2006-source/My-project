@@ -20,6 +20,11 @@ on:
       - "scripts/probar_paquete.sh"
       - ".github/workflows/servidor-exe.yml"
   workflow_dispatch:
+    inputs:
+      borrador:
+        description: "Crear un Release BORRADOR (draft) con el zip del servidor, para probar el paso del Release sin tags"
+        type: boolean
+        default: false
 
 permissions:
   contents: write   # para crear el Release en los tags
@@ -58,19 +63,27 @@ jobs:
           cd dist && python -m zipfile -c ../QuimicaServidor_Windows.zip QuimicaServidor && cd ..
           scripts/probar_paquete.sh QuimicaServidor_Windows.zip exe
 
-      # Solo en tags v*, y solo si la prueba de humo pasó (los pasos anteriores cortan el job)
+      # En tags v* (Release público) o a mano con borrador=true (draft: no se publica ni
+      # crea el tag). Solo si la prueba de humo pasó: los pasos anteriores cortan el job.
       - name: GitHub Release con el zip del servidor
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.borrador)
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          BORRADOR: ${{ github.event_name == 'workflow_dispatch' && inputs.borrador }}
         run: |
+          if [ "$BORRADOR" = true ]; then
+            # Un draft no crea el tag en git (recién al publicarlo): no quedan tags descartables
+            TAG="borrador-${GITHUB_RUN_ID}"; OPCIONES=(--draft --target "$GITHUB_SHA" --title "[borrador] $TAG")
+          else
+            TAG="$GITHUB_REF_NAME"; OPCIONES=(--verify-tag --title "$TAG")
+          fi
           ZIP="QuimicaServidor_Windows_${TAG}.zip"
           mv QuimicaServidor_Windows.zip "$ZIP"
           # Si el Release ya existe (un re-run, o creado a mano), solo se reemplaza el zip
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --title "$TAG" \
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" "${OPCIONES[@]}" \
             --notes "Servidor local para Windows (QuimicaServidor.exe). Descomprimir en Documentos o en el Escritorio y abrir QuimicaServidor.exe. Probado desde el zip con scripts/probar_paquete.sh en windows-latest."
           gh release upload "$TAG" "$ZIP" --clobber
+          echo "Release: $TAG"
 
       - uses: actions/upload-artifact@v4
         with:
