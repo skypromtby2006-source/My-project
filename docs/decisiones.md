@@ -42,3 +42,26 @@ Tomado de la explicación de la demo original (`_base/LEEME_demo_anterior.md`, e
 
 **Dependencias de tests aparte** (`servidor/requirements-dev.txt`): pytest y httpx no van en la imagen de Docker ni en el venv del Plan B2.
 
+## Sprint 4 — Dos formas de correr el servidor
+
+El juego necesita un servidor. Hay dos maneras de ofrecerlo, y conviven:
+
+**Servidor dedicado — Docker + PostgreSQL (recomendado para varios equipos).** Es lo que ya existe (`docker-compose.yml`). Una PC lo levanta y toda el aula se conecta a su IP. PostgreSQL guarda perfiles, progreso, eventos, logs y auditoría con durabilidad real y consultas concurrentes. Es la opción para una clase entera o un laboratorio fijo.
+
+**Servidor local — un solo ejecutable + SQLite (para una PC sin Docker).** Para el docente que solo quiere probarlo en su máquina, o para la prueba en Windows sin instalar Docker Desktop. Un `.exe` (PyInstaller, modo carpeta) trae el servidor del juego, la API y el panel. Si no hay `DATABASE_URL`, el servidor usa un archivo **SQLite** (`quimica.db`) junto al ejecutable, con **las mismas tablas y las mismas consultas** que PostgreSQL. Si SQLite fallara, cae a memoria (como antes). No reemplaza al servidor dedicado: SQLite es de un solo escritor, pensado para una PC, no para un aula conectándose a la vez.
+
+**Por qué una capa de datos (`servidor/repositorio.py`) y no dos caminos de SQL.** Antes cada función tenía su SQL de PostgreSQL embebido. Para soportar los dos motores sin duplicar queries ni "traducir" SQL con regex (frágil), todo el SQL vive ahora en `repositorio.py`. El SQL se escribe **portable** (SQLite ≥ 3.38 y PostgreSQL soportan `RETURNING`, `FILTER (WHERE …)` y `->>`), y las pocas diferencias **inevitables** se declaran en un **diccionario explícito por motor** (no en reemplazos de texto):
+
+| Diferencia | PostgreSQL | SQLite |
+|---|---|---|
+| Timestamp actual | `now()` | `datetime('now')` |
+| Clave autoincremental | `SERIAL PRIMARY KEY` | `INTEGER PRIMARY KEY AUTOINCREMENT` |
+| JSON | `JSONB` | `TEXT` (con las funciones `json1`) |
+| Fecha con zona | `TIMESTAMPTZ` | `TEXT` ISO-8601 (UTC) |
+| Búsqueda sin distinguir mayúsculas | `ILIKE` | `LIKE` (SQLite no distingue mayúsculas en ASCII) |
+| Placeholder de parámetro | `$1, $2, …` | `?` |
+
+**Versión de SQLite:** se verificó que `RETURNING`, `FILTER` y `->>` funcionan en el `sqlite3` de la stdlib — comprobado aquí en **Python 3.14.8 con SQLite 3.54.0**. En el Python 3.12 del entorno de Jona el `sqlite3` trae SQLite ≥ 3.45, de sobra por encima del mínimo requerido (**3.38**, por `->>`). Se usa el `sqlite3` de la biblioteca estándar (sin dependencias nuevas, mejor para empaquetar con PyInstaller); como `sqlite3` es sincrónico, cada consulta corre en un hilo con `asyncio.to_thread` y un lock, porque SQLite serializa la escritura de todos modos.
+
+**Los tests corren contra los dos motores.** La misma batería (perfiles, progreso, panel, laberinto) se parametriza: SQLite siempre, y PostgreSQL cuando hay una BD de prueba disponible (Docker). Así "mismas consultas" no es una promesa sino algo probado.
+
