@@ -1,9 +1,9 @@
-## Reporte Fase S4-2 (arranque) — Cliente en primera persona y greybox desde el JSON
+## Reporte Fase S4-2 — Cliente en primera persona y greybox desde el JSON
 
-> S4-2 arrancada un día antes (lunes 09). Estado: **núcleo escrito y compilando (cero error
-> CS)**. Falta el build de Linux y el escenario de `probar_build.sh` con dos bots, que son la
-> parte que necesita el ejecutable; eso cierra S4-2 (martes). El guion de la prueba manual ya
-> está en `docs/pruebas/s4-greybox.md`.
+> **S4-2 CERRADA.** Núcleo en primera persona + greybox desde el dato, build de Linux generado
+> (96 MB, 0 error CS) y `probar_build.sh laberinto` en verde contra el build real, con el
+> **door-cross físico** incluido. El guion de la prueba manual (Jona, S4-3) está en
+> `docs/pruebas/s4-greybox.md`.
 
 ### Hecho
 - **Condiciones de S4-1 cerradas:**
@@ -19,26 +19,25 @@
   - `ClienteRed.cs`/`GestorPartida.cs`: modelos del nivel y de `sala_estado`, envíos `dial`/`interactuar`/`montacargas`/`palanca`, y el armado de la escena del laberinto (jugador local en 1ª persona, remotos como cápsulas).
 
 ### Probado (cómo y resultado)
-- **Compilación en batch (editor cerrado): cero `error CS`.** `logs/unity_s42_compile.log`: compile time 4,3 s, 0 errores, 1 domain reload. (Criterio de §7 cumplido.)
-- `pytest` del servidor: **40 en verde** (el cambio de `inicio_info` es aditivo; `test_laberinto`/`test_nivel`/panel sin romperse).
+- **Build de Linux generado:** `Quimica/3. Build Linux` en batch (editor cerrado) → **Succeeded, 96 MB, 0 `error CS`** (`logs/unity_s42_build.log`).
+- **`scripts/probar_build.sh laberinto` y `laberinto_player`: TODO OK** contra el build real (headless), con un servidor propio de semilla fija. Cubre:
+  - **Door-cross físico (la corrección del PM):** con la puerta **cerrada**, el Wizard empuja contra ella y **no la cruza** (`local_x > 9`); al completar la sala, la **misma** puerta abre y **sí la cruza** (`local_x < 8`).
+  - **B1:** dos partidas seguidas sin cerrar la ventana; en cada una el Wizard/Player ve al otro y, al volver al lobby, no queda la escena vieja.
+  - **B2:** sale el Player → el Wizard sigue; sale el Wizard → el Player vuelve al lobby con el aviso.
+  - **B4:** el build reconecta tras reiniciar el servidor.
+- `pytest` del servidor: **42 en verde** (40 previos + 2 del hook `NIVEL_SEMILLA`).
 
-### Correcciones de la revisión del PM
-1. **Puertas y muro central bloquean físicamente desde el greybox (hecho, compila cero CS).** Cada puerta es ahora un cubo **sólido** que llena el hueco de la pared; su collider se **desactiva** cuando `sala_estado` la marca abierta (`GeneradorNivel.AbrirHasta`), y entonces baja y se pinta de verde. El muro central y el borde de cada mitad son paredes `#` sólidas: se ve por el hueco, no se cruza. El guion `s4-greybox.md` suma el paso 1b (intentar cruzar una puerta cerrada y el muro: no se puede).
-2. **Los escenarios viejos de `probar_build.sh` se migran al laberinto (no se borran):** pendiente, es trabajo sobre el **build** (ver abajo).
+### Correcciones de la revisión del PM (ambas hechas y verificadas)
+1. **Puertas y muro central bloquean físicamente desde el greybox.** Cada puerta es un cubo **sólido** que llena el hueco de la pared; su collider se **desactiva** cuando `sala_estado` la marca abierta (`GeneradorNivel.AbrirHasta`), y entonces baja y se pinta de verde. El muro central y el borde de cada mitad son paredes `#` sólidas. **Verificado en el build** por el door-cross de `probar_build.sh laberinto`. El guion `s4-greybox.md` suma el paso 1b.
+2. **Escenarios viejos migrados al laberinto (no borrados):** su cobertura (B1/B2/B2/B4) vive ahora en `laberinto` y `laberinto_player`, porque el cliente **siempre** inicia en modo laberinto (los de la misión agua ya no aplicaban). `sesion`/`reinicio`/`panel`, que no dependen del modo, siguen igual.
 
-### Pendiente / riesgos (cierre de S4-2, martes) — necesita el ejecutable
-> No pude generar ni correr el build de Linux headless en esta sesión (Unity build + Docker + ejecutar el binario), así que esta parte queda escrita como plan y se hace al armar el build. Lo demás ya está verificado (compila cero CS; `pytest` 40 en verde).
-
-- **Build de Linux** del greybox.
-- **`scripts/probar_build.sh laberinto`**, con el plan concreto:
-  - **Hook determinista en el servidor:** variable `NIVEL_SEMILLA` para que `Partida` sortee con semilla fija; así `probar_build.py` importa `nivel` y **conoce las respuestas** para resolver los puzzles.
-  - **Recorrido de las 5 salas con dos bots** (protocolo, como `test_laberinto.py`), comprobando que cada puerta abre.
-  - **Comprobación física (necesita el build):** un paso nuevo en `PruebaAutomatica.cs` que camina contra una puerta **cerrada** y reporta que **no la cruza** (la posición no pasa el umbral).
-  - **Migrar los escenarios viejos al laberinto, cubriendo lo mismo:** 2 partidas seguidas sin cerrar ventanas (B1), un Player que sale a mitad y el resto sigue (B2), el Wizard que sale y la sala se cierra (B2), y la reconexión tras reiniciar el servidor (B4). `probar_perfiles` (login/perfil) no depende del modo y sigue válido.
-- La corrección visual/jugable (que cada sala se entienda y no aburra) la valida Jona en **S4-3** con el guion `docs/pruebas/s4-greybox.md`.
+### Cómo se hizo verificable
+- **Hook determinista** `NIVEL_SEMILLA` en `server.py`: con semilla fija, `probar_build.py` importa `nivel` y **conoce las respuestas**; vacío en producción (sorteo al azar). Tiene su test.
+- **El escenario levanta su propio servidor** (`ServidorLocal`, puerto 7788, en memoria): no depende de Docker y permite la prueba B4 reiniciándolo. El Wizard es el build (manda `dial`/`palanca` reales) y el Player un bot que resuelve su lado; la palanca de cada lado baja con < 2 s de diferencia por señales.
+- **Pasos nuevos en `PruebaAutomatica.cs`:** `colocar` (teletransporta para la prueba), `empujar` (mueve con el mismo `CharacterController`, así choca con el collider), `dial`/`palanca`/`interactuar`, `esperar_escena`/`esperar_sala`/`esperar_nivel`.
 
 ### Necesito de Jona
-1. Para la prueba de jugabilidad (S4-3, miércoles si S4-2 cierra el martes): abrir el proyecto una vez desde Unity Hub si el batch pide licencia, y después jugar en pareja con el guion.
+1. **Prueba de jugabilidad (S4-3, miércoles):** jugar en pareja con el guion `docs/pruebas/s4-greybox.md` y anotar por sala si aburre/confunde/es fácil.
 2. Seguir con los **assets CC0** (§4) — no bloquea el greybox.
 
 ### Commit / push

@@ -85,3 +85,22 @@ def test_la_puerta_solo_abre_con_las_dos_palancas_en_menos_de_2s():
     assert not nivel.palanca_ok(10.0, 12.5)   # 2.5 s -> no abre
     assert not nivel.palanca_ok(10.0, 100.0)  # uno solo bajó -> no abre
     assert nivel.palanca_ok(100.0, 98.6)      # el orden no importa
+
+
+def test_la_semilla_hace_el_sorteo_reproducible(monkeypatch):
+    """El hook NIVEL_SEMILLA (probar_build) fija el sorteo: con la misma semilla,
+    dos partidas tienen los mismos números, y coinciden con nivel.sortear(Random)."""
+    import server  # noqa: E402
+    monkeypatch.setattr(server, "SEMILLA_NIVEL", "123")
+    p1 = server.Partida()
+    p2 = server.Partida()
+    assert p1.sorteo == p2.sorteo                         # dos partidas, mismos números
+    assert p1.sorteo == nivel.sortear(random.Random(123))  # el orquestador los puede calcular
+
+
+def test_sin_semilla_el_sorteo_es_al_azar(monkeypatch):
+    import server  # noqa: E402
+    monkeypatch.setattr(server, "SEMILLA_NIVEL", None)
+    # Muy improbable que 5 partidas sorteen todas lo mismo si es al azar.
+    sorteos = [tuple(sorted((k, repr(v)) for k, v in server.Partida().sorteo[1].items())) for _ in range(5)]
+    assert len(set(sorteos)) > 1

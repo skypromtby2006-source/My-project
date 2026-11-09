@@ -6,14 +6,22 @@ la prueba S2-3 aunque esos tests dieran TODO OK. Aquí cada "jugador Unity" es e
 ejecutable de Build/Linux en -batchmode, manejado por PruebaAutomatica.cs (los mismos
 métodos que los botones), y los demás jugadores son bots.
 Uso:  python probar_build.py [escenario ...]   (sin argumentos: todos)
-Escenarios: wizard, player, sesion, reinicio, progreso (los dos últimos reinician el servidor),
-panel (acciones del panel web: necesita ADMIN_PASSWORD en el .env)
+Escenarios:
+  laberinto, laberinto_player  el juego nuevo (S4). Levantan su PROPIO servidor con
+      semilla fija (NIVEL_SEMILLA, puerto 7788, en memoria): conocen las respuestas de
+      los puzzles y no necesitan Docker. "laberinto" incluye el door-cross físico.
+  sesion, reinicio             usan el servidor de Docker; "reinicio" lo reinicia.
+  panel                        acciones del panel web: necesita ADMIN_PASSWORD en el .env.
+La cobertura de los viejos "wizard"/"player"/"progreso" (misión agua) migró a los dos
+escenarios de laberinto, porque el cliente ahora siempre inicia en modo laberinto.
 """
 import asyncio
 import json
 import math
+import os
 import pathlib
 import queue
+import random
 import subprocess
 import sys
 import tempfile
@@ -24,8 +32,35 @@ import uuid
 RAIZ = pathlib.Path(__file__).resolve().parent.parent
 JUEGO = RAIZ / "Build" / "Linux" / "QuimicaDemo.x86_64"
 IP, PUERTO = "127.0.0.1", 7777
+PUERTO_LAB, PUERTO_PANEL_LAB = 7788, 8008   # servidor propio del escenario laberinto
+SEMILLA_LAB = 123                            # debe coincidir con el NIVEL_SEMILLA del servidor
 SENALES = pathlib.Path(tempfile.mkdtemp(prefix="quimica_prueba_"))
 MSG_WIZARD_SALIO = "El Wizard salió, la sala se cerró"
+
+# El nivel es un dato (nivel.py): con la misma semilla que el servidor, el
+# orquestador conoce las respuestas de los 5 puzzles sin mirar el estado interno.
+sys.path.insert(0, str(RAIZ / "servidor"))
+import nivel  # noqa: E402
+
+_DATOS_NIVEL = nivel.cargar()
+_SORTEO_LAB = nivel.sortear(random.Random(SEMILLA_LAB))
+
+
+def _lado_de(cid):
+    for sala in _DATOS_NIVEL["salas"]:
+        for lado in ("wizard", "player"):
+            if any(c["id"] == cid for c in sala["consolas"][lado]):
+                return lado
+    return None
+
+
+def requeridos_por_lado(num):
+    """Las consolas requeridas de la sala `num`, separadas por lado: el Wizard (build)
+    resuelve su parte y el Player (bot) la suya."""
+    req = nivel.requeridos(_SORTEO_LAB, num)
+    w = {k: v for k, v in req.items() if _lado_de(k) == "wizard"}
+    p = {k: v for k, v in req.items() if _lado_de(k) == "player"}
+    return w, p
 
 fallos: list[str] = []
 escenario_actual = ""
@@ -45,6 +80,51 @@ def senal(nombre, contenido=""):
 
 def cerca(x1, z1, x2, z2):
     return math.hypot(x1 - x2, z1 - z2) < 0.05
+
+
+class ServidorLocal:
+    """El servidor del juego en un proceso propio, con semilla fija (NIVEL_SEMILLA) y
+    BD en memoria. El escenario del laberinto lo usa en vez del servidor de Docker:
+    así el orquestador conoce las respuestas (semilla) y puede reiniciarlo para la
+    prueba B4 sin depender de Docker. Usa un puerto propio (PUERTO_LAB) para no chocar
+    con un servidor de Docker que esté levantado."""
+
+    def __init__(self):
+        self.proc = None
+
+    def _python(self):
+        venv = RAIZ / ".venv" / "bin" / "python"
+        return str(venv) if venv.exists() else sys.executable
+
+    async def arrancar(self):
+        env = dict(os.environ)
+        env["NIVEL_SEMILLA"] = str(SEMILLA_LAB)
+        env["PUERTO"] = str(PUERTO_LAB)
+        env["PUERTO_PANEL"] = str(PUERTO_PANEL_LAB)
+        env.pop("DATABASE_URL", None)   # en memoria: no toca la BD de nadie
+        self.proc = subprocess.Popen([self._python(), str(RAIZ / "servidor" / "server.py")],
+                                     env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        for _ in range(80):
+            try:
+                _, w = await asyncio.open_connection(IP, PUERTO_LAB)
+                w.close()
+                return
+            except OSError:
+                await asyncio.sleep(0.25)
+        raise TimeoutError("el servidor local del laberinto no arrancó en 20 s")
+
+    async def reiniciar(self):
+        self.detener()
+        await asyncio.sleep(0.5)
+        await self.arrancar()
+
+    def detener(self):
+        if self.proc and self.proc.poll() is None:
+            self.proc.terminate()
+            try:
+                self.proc.wait(5)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
 
 
 class Build:
@@ -143,112 +223,24 @@ class Bot:
             await asyncio.sleep(0.5)
         raise TimeoutError(f"{self.nombre}: no apareció la sala de {nombre_host}")
 
+    # ---- laberinto (S4): el bot es el otro jugador y resuelve SU lado ----
+    async def entrar_laberinto(self, nombre_host):
+        """Se une a la sala del Wizard (build), marca listo y recibe el inicio del
+        laberinto. El build inicia la partida; el bot espera el `inicio`."""
+        await self.unirse_a(nombre_host)
+        self.inicio = await self.rec("inicio")
+        return self.inicio
+
+    async def dial(self, cid, valor):
+        await self.env(t="dial", consola=cid, valor=valor)
+        await self.rec("sala_estado")
+
+    async def palanca(self):
+        await self.env(t="palanca", puerta="x")
+        await self.rec("sala_estado")
+
     def cerrar(self):
         self.w.close()
-
-
-def aparicion_de(inicio, jugador_id):
-    a = next((x for x in inicio.get("apariciones", []) if x["id"] == jugador_id), None)
-    return (a["x"], a["z"]) if a else None
-
-
-# ----------------------------------------------------------------- escenarios
-async def escenario_wizard(s):
-    """B1 (el Wizard ve a los demás en cada partida), B2 (sale un Player) y B5 (apariciones)."""
-    w = f"w_{s}"
-
-    def partida(n):
-        return ["crear_sala", f"marca|sala{n}", "esperar_jugadores|2", "esperar_listos", "iniciar",
-                "esperar_pantalla|Partida", "esperar|0.5", f"reporte|p{n}_aparicion",
-                f"esperar_senal|p{n}_pos", "esperar|0.5", f"reporte|p{n}"]
-
-    b = Build("wizard", ["conectar", f"registro|{w}|W{s}|#3FA9F5", "esperar_pantalla|Salas", *partida(1),
-                         "esperar_senal|p1_salio", "esperar|1", "reporte|p1_tras_salida",
-                         "salir", "esperar_pantalla|Salas", "esperar|0.5", "reporte|lobby1",
-                         # Partida 2: después de editar el perfil (el caso de la S2-3)
-                         "abrir_perfil", f"guardar_perfil|W2{s}|#E04F4F", "volver", *partida(2),
-                         "salir", "esperar_pantalla|Salas",
-                         # Partida 3: después de cerrar sesión y volver a entrar (MiId nuevo)
-                         "desconectar", "conectar", f"login|{w}", "esperar_pantalla|Salas", *partida(3),
-                         "fin"])
-
-    for n, nombre_host in ((1, f"W{s}"), (2, f"W2{s}"), (3, f"W2{s}")):
-        print(f"Partida {n}: un bot se une a la sala del Wizard (build)")
-        await b.esperar(f"MARCA sala{n}")
-        bot = await Bot.nuevo(f"b{n}_{s}", f"B{n}{s}")
-        await bot.unirse_a(nombre_host)
-        inicio = await bot.rec("inicio")
-        r = await b.esperar(f"REPORTE p{n}_aparicion")
-        comprobar(r["local"], f"p{n}: el Wizard tiene su cápsula")
-        remoto = next((x for x in r["remotos"] if x["id"] == bot.id), None)
-        comprobar(remoto is not None, f"p{n}: el Wizard tiene la cápsula del Player", r["remotos"])
-        if remoto:
-            comprobar(not cerca(r["local_x"], r["local_z"], remoto["x"], remoto["z"]),
-                      f"p{n}: Wizard y Player aparecen en puntos distintos", r)
-        if "apariciones" in inicio["mision"] or "apariciones" in inicio:
-            ap = inicio.get("apariciones")
-            mia, suya = aparicion_de(inicio, r["mi_id"]), aparicion_de(inicio, bot.id)
-            comprobar(len({(x["x"], x["z"]) for x in ap}) == len(ap), f"p{n}: el servidor asigna apariciones distintas", ap)
-            comprobar(mia and cerca(r["local_x"], r["local_z"], *mia), f"p{n}: el Wizard aparece donde dice el servidor", (r, mia))
-            if remoto and suya:
-                comprobar(cerca(remoto["x"], remoto["z"], *suya), f"p{n}: el Player aparece donde dice el servidor", (remoto, suya))
-
-        await bot.env(t="pos", x=2.5, y=1, z=1.0, ry=0)
-        senal(f"p{n}_pos")
-        r = await b.esperar(f"REPORTE p{n}")
-        remoto = next((x for x in r["remotos"] if x["id"] == bot.id), None)
-        comprobar(remoto is not None and cerca(remoto["x"], remoto["z"], 2.5, 1.0),
-                  f"p{n}: el Wizard ve moverse al Player", r["remotos"])
-        comprobar(r["mi_id"] in r["jugadores_sala"], f"p{n}: MiId está en la sala", r)
-
-        if n == 1:
-            print("El Player sale a mitad de la misión: el Wizard sigue en la partida")
-            await bot.env(t="salir")
-            await bot.rec("fuera")
-            senal("p1_salio")
-            r = await b.esperar("REPORTE p1_tras_salida")
-            comprobar(r["pantalla"] == "Partida", "B2: si sale un Player, el Wizard sigue jugando", r["pantalla"])
-            comprobar(r["remotos"] == [], "el Player que salió ya no se dibuja", r["remotos"])
-            r = await b.esperar("REPORTE lobby1")
-            comprobar(r["pantalla"] == "Salas", "el Wizard volvió al lobby con ESC", r["pantalla"])
-            comprobar(not r["escena"], "B1: al volver al lobby no queda la escena de la partida vieja", r)
-        bot.cerrar()
-    await b.esperar("FIN")
-
-
-async def escenario_player(s):
-    """B1 desde el Player (ve al Wizard en cada partida) y B2 (sale el Wizard)."""
-    p = Build("player", ["conectar", f"registro|p_{s}|P{s}|#4FE07A", "esperar_pantalla|Salas",
-                         "unirse_codigo|codigo1", "esperar_pantalla|Sala", "listo", "esperar_pantalla|Partida",
-                         "esperar_senal|g1_pos", "esperar|0.5", "reporte|g1",
-                         "esperar_senal|g1_wizard_salio", "esperar|1.5", "reporte|tras_wizard",
-                         "unirse_codigo|codigo2", "esperar_pantalla|Sala", "listo", "esperar_pantalla|Partida",
-                         "esperar_senal|g2_pos", "esperar|0.5", "reporte|g2", "fin"])
-    for n in (1, 2):
-        print(f"Partida {n}: el Player (build) se une a la sala de un bot Wizard")
-        wiz = await Bot.nuevo(f"z{n}_{s}", f"Z{n}{s}", "#E04FD8")
-        await wiz.crear_sala(f"codigo{n}")
-        await wiz.esperar_sala_lista()
-        await wiz.env(t="iniciar")
-        await wiz.rec("inicio")
-        await wiz.env(t="pos", x=-2.0, y=1, z=2.0, ry=0)
-        senal(f"g{n}_pos")
-        r = await p.esperar(f"REPORTE g{n}")
-        remoto = next((x for x in r["remotos"] if x["id"] == wiz.id), None)
-        comprobar(r["local"], f"g{n}: el Player tiene su cápsula")
-        comprobar(remoto is not None and cerca(remoto["x"], remoto["z"], -2.0, 2.0),
-                  f"g{n}: el Player ve al Wizard y lo ve moverse", r["remotos"])
-        if n == 1:
-            print("El Wizard sale: la sala se cierra para todos")
-            await wiz.env(t="salir")
-            await wiz.rec("fuera")
-            senal("g1_wizard_salio")
-            r = await p.esperar("REPORTE tras_wizard")
-            comprobar(r["pantalla"] == "Salas", "B2: si sale el Wizard, el Player vuelve al lobby", r["pantalla"])
-            comprobar(MSG_WIZARD_SALIO in (r["aviso"] or ""), "B2: el Player ve el aviso de sala cerrada", r["aviso"])
-            comprobar(not r["escena"], "B1: no queda la escena de la partida vieja", r)
-        wiz.cerrar()
-    await p.esperar("FIN")
 
 
 async def escenario_sesion(s):
@@ -317,40 +309,140 @@ async def escenario_reinicio(s):
     await reiniciar_servidor()  # deja el servidor escuchando para el siguiente escenario
 
 
-async def escenario_progreso(s):
-    """B3: el Player completa la misión y la ve en Mi perfil; B4: reconexión tras reiniciar el servidor."""
-    q = f"q_{s}"
-    p = Build("progreso", ["conectar", f"registro|{q}|Q{s}|#F5913F", "esperar_pantalla|Salas",
-                           "unirse_codigo|codigo_q", "esperar_pantalla|Sala", "listo", "esperar_pantalla|Partida",
-                           "llevar|H", "llevar|H", "llevar|O", "esperar|0.5", "reporte|completada",
-                           # La hipótesis del PM: que el Wizard salga justo al terminar
-                           "esperar_senal|wiz_salio", "esperar|1", "salir", "esperar_pantalla|Salas", "abrir_perfil", "reporte|perfil1", "volver",
-                           "marca|reiniciar", "esperar_pantalla|Conexion", "reporte|caido",
-                           "esperar_senal|servidor_arriba", "reconectar", f"login|{q}", "esperar_pantalla|Salas",
-                           "abrir_perfil", "reporte|perfil2", "fin"])
-    wiz = await Bot.nuevo(f"zq_{s}", f"ZQ{s}", "#E04FD8")
-    await wiz.crear_sala("codigo_q")
-    await wiz.esperar_sala_lista()
-    await wiz.env(t="iniciar")
-    r = await p.esperar("REPORTE completada")
-    comprobar(r["mision_completada"], "el Player (build) completó la misión", r)
-    await wiz.env(t="salir")
-    await wiz.rec("fuera")
-    senal("wiz_salio")
-    r = await p.esperar("REPORTE perfil1")
-    comprobar(r["pantalla"] == "EditarPerfil", "Mi perfil está abierto", r["pantalla"])
-    comprobar(r["completadas"] == 1 and r["historial"] == 1, "B3: Mi perfil muestra la misión completada", r)
-    await p.esperar("MARCA reiniciar")
-    wiz.cerrar()
-    print("servidor_detener.sh + servidor_iniciar.sh con el juego abierto")
-    await reiniciar_servidor()
-    r = await p.esperar("REPORTE caido")
-    comprobar(r["pantalla"] == "Conexion", "el juego detecta que el servidor se cayó", r)
-    senal("servidor_arriba")
-    r = await p.esperar("REPORTE perfil2", timeout=90)
-    comprobar(r["usuario"] == q, "B4: vuelve a entrar con el mismo usuario tras reiniciar el servidor", r)
-    comprobar(r["completadas"] == 1 and r["historial"] == 1, "B3: el progreso sigue tras reiniciar el servidor", r)
-    await p.esperar("FIN")
+async def escenario_laberinto(s):
+    """Laberinto (S4), con el Wizard en el build y el Player como bot, contra un
+    servidor propio con semilla fija:
+      - Door-cross FÍSICO: una puerta cerrada bloquea de verdad; al completarse la
+        sala, la misma puerta abre y deja pasar (regla del juego, no arte).
+      - B1: dos partidas seguidas sin cerrar la ventana; en cada una el Wizard ve al
+        Player y, al volver al lobby, no queda la escena vieja.
+      - B2: el Player sale a mitad y el Wizard sigue en la partida.
+      - B4: reconexión después de reiniciar el servidor.
+    """
+    global PUERTO
+    orig_puerto = PUERTO
+    PUERTO = PUERTO_LAB
+    srv = ServidorLocal()
+    w = f"wl_{s}"
+    reqw, reqp = requeridos_por_lado(1)       # sala 1 (balanceo): dial_h2 / dial_o2
+    h2, o2 = reqw["dial_h2"], reqp["dial_o2"]
+    # Colocamos al jugador al ESTE de la puerta D1 (col 6, fila 2 = x 12, z -4) y lo
+    # empujamos al OESTE contra D1 (centro x 8): ese tramo no tiene marcadores.
+    ESTE_DE_D1, EMPUJE_OESTE = "colocar|12|1.1|-4", "empujar|-1|0|2.5"
+
+    def partida(nombre):
+        return ["crear_sala", f"marca|{nombre}", "esperar_jugadores|2", "esperar_listos", "iniciar",
+                "esperar_pantalla|Partida", "esperar_escena", "esperar|0.5"]
+
+    try:
+        await srv.arrancar()
+        build = Build("laberinto", [
+            "conectar", f"registro|{w}|WLab{s}|#3FA9F5", "esperar_pantalla|Salas",
+            *partida("p1"), "reporte|p1_inicio",
+            ESTE_DE_D1, EMPUJE_OESTE, "esperar|0.2", "reporte|dc_cerrada",
+            f"dial|dial_h2|{h2}", "marca|s1_wiz_listo", "esperar_senal|s1_baja", "palanca|D1",
+            "esperar_sala|2", "reporte|sala2",
+            ESTE_DE_D1, EMPUJE_OESTE, "esperar|0.2", "reporte|dc_abierta",
+            "esperar_senal|player_fuera", "esperar|1", "reporte|tras_player",
+            "salir", "esperar_pantalla|Salas", "esperar|0.3", "reporte|lobby1",
+            *partida("p2"), "reporte|p2_inicio", "salir", "esperar_pantalla|Salas",
+            "marca|reiniciar", "esperar_pantalla|Conexion", "esperar_senal|servidor_ok",
+            "conectar", "esperar_pantalla|Perfil", f"registro|{w}b|WLab2{s}|#3FA9F5",
+            "esperar_pantalla|Salas", "reporte|reconectado", "fin"])
+
+        # ---- Partida 1 ----
+        await build.esperar("MARCA p1")
+        bot = await Bot.nuevo(f"bl1_{s}", f"BL1{s}", "#4FE07A")
+        await bot.entrar_laberinto(f"WLab{s}")
+        r = await build.esperar("REPORTE p1_inicio")
+        comprobar(r["escena"] and r["sala_lab"] == 1, "laberinto: el Wizard entra a la sala 1", r)
+        remoto = next((x for x in r["remotos"] if x["id"] == bot.id), None)
+        comprobar(remoto is not None, "B1: el Wizard ve la cápsula del Player", r["remotos"])
+
+        r = await build.esperar("REPORTE dc_cerrada")
+        comprobar(r["local_x"] > 9.0, "la puerta CERRADA bloquea: el Wizard no la cruza", r["local_x"])
+        comprobar(r["local_x"] < 11.9, "y el empuje sí lo movió hacia la puerta (no quedó quieto)", r["local_x"])
+
+        # Resolver la sala 1: el bot fija su dial y las dos palancas bajan casi a la vez
+        await build.esperar("MARCA s1_wiz_listo")
+        await bot.dial("dial_o2", o2)
+        senal("s1_baja")           # el build baja su palanca enseguida
+        await bot.palanca()        # y el bot la suya (< 2 s)
+        r = await build.esperar("REPORTE sala2")
+        comprobar(r["sala_lab"] == 2, "con las dos partes y las dos palancas, la sala 1 se completa", r["sala_lab"])
+
+        r = await build.esperar("REPORTE dc_abierta")
+        comprobar(r["local_x"] < 8.0, "la puerta ABIERTA deja pasar: el Wizard la cruza", r["local_x"])
+
+        # ---- B2: el Player sale, el Wizard sigue ----
+        await bot.env(t="salir")
+        await bot.rec("fuera")
+        senal("player_fuera")
+        r = await build.esperar("REPORTE tras_player")
+        comprobar(r["pantalla"] == "Partida", "B2: si sale el Player, el Wizard sigue jugando", r["pantalla"])
+        comprobar(r["remotos"] == [], "y el Player que salió ya no se dibuja", r["remotos"])
+        r = await build.esperar("REPORTE lobby1")
+        comprobar(r["pantalla"] == "Salas" and not r["escena"], "B1: al volver al lobby no queda la escena vieja", r)
+        bot.cerrar()
+
+        # ---- Partida 2 (sin cerrar la ventana) ----
+        await build.esperar("MARCA p2")
+        bot2 = await Bot.nuevo(f"bl2_{s}", f"BL2{s}", "#E04FD8")
+        await bot2.entrar_laberinto(f"WLab{s}")
+        r = await build.esperar("REPORTE p2_inicio")
+        comprobar(r["escena"] and r["sala_lab"] == 1, "B1: segunda partida seguida, escena nueva de la sala 1", r)
+        comprobar(any(x["id"] == bot2.id for x in r["remotos"]), "B1: el Wizard ve al nuevo Player", r["remotos"])
+        bot2.cerrar()
+
+        # ---- B4: reinicio del servidor ----
+        await build.esperar("MARCA reiniciar")
+        await srv.reiniciar()
+        senal("servidor_ok")
+        r = await build.esperar("REPORTE reconectado", timeout=90)
+        comprobar(r["pantalla"] == "Salas", "B4: el Wizard reconecta tras reiniciar el servidor", r)
+        await build.esperar("FIN")
+    finally:
+        srv.detener()
+        PUERTO = orig_puerto
+
+
+async def escenario_laberinto_player(s):
+    """Laberinto (S4) con el Player en el build y el Wizard como bot: B1 (el Player ve
+    al Wizard) y B2 (sale el Wizard y la sala se cierra para el Player)."""
+    global PUERTO
+    orig_puerto = PUERTO
+    PUERTO = PUERTO_LAB
+    srv = ServidorLocal()
+    try:
+        await srv.arrancar()
+        build = Build("laberinto_p", [
+            "conectar", f"registro|pl_{s}|PLab{s}|#4FE07A", "esperar_pantalla|Salas",
+            "unirse_codigo|codlab", "esperar_pantalla|Sala", "listo", "esperar_pantalla|Partida",
+            "esperar_escena", "esperar|0.5", "reporte|inicio",
+            "esperar_senal|wiz_fuera", "esperar|1.5", "reporte|tras_wiz", "fin"])
+        wiz = await Bot.nuevo(f"zl_{s}", f"ZL{s}", "#E04FD8")
+        await wiz.crear_sala("codlab")
+        await wiz.esperar_sala_lista()
+        await wiz.env(t="iniciar", modo="laberinto")
+        await wiz.rec("inicio")
+        await wiz.env(t="pos", x=-2.0, y=1, z=2.0, ry=0)
+        r = await build.esperar("REPORTE inicio")
+        comprobar(r["escena"] and r["sala_lab"] == 1, "laberinto: el Player entra a la sala 1", r)
+        remoto = next((x for x in r["remotos"] if x["id"] == wiz.id), None)
+        comprobar(remoto is not None, "B1: el Player ve la cápsula del Wizard", r["remotos"])
+
+        await wiz.env(t="salir")
+        await wiz.rec("fuera")
+        senal("wiz_fuera")
+        r = await build.esperar("REPORTE tras_wiz")
+        comprobar(r["pantalla"] == "Salas", "B2: si sale el Wizard, el Player vuelve al lobby", r["pantalla"])
+        comprobar(MSG_WIZARD_SALIO in (r["aviso"] or ""), "B2: el Player ve el aviso de sala cerrada", r["aviso"])
+        comprobar(not r["escena"], "B1: no queda la escena de la partida vieja", r)
+        await build.esperar("FIN")
+        wiz.cerrar()
+    finally:
+        srv.detener()
+        PUERTO = orig_puerto
 
 
 def panel(ruta, datos=None, token=None):
@@ -418,8 +510,8 @@ async def escenario_panel(s):
         w.cerrar()
 
 
-ESCENARIOS = {"wizard": escenario_wizard, "player": escenario_player,
-              "sesion": escenario_sesion, "reinicio": escenario_reinicio, "progreso": escenario_progreso,
+ESCENARIOS = {"laberinto": escenario_laberinto, "laberinto_player": escenario_laberinto_player,
+              "sesion": escenario_sesion, "reinicio": escenario_reinicio,
               "panel": escenario_panel}
 
 

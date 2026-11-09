@@ -43,6 +43,10 @@ import nivel  # el nivel es un dato: carga, sorteo y validación del laberinto (
 HOST = "0.0.0.0"
 PUERTO = int(os.getenv("PUERTO", "7777"))
 DATABASE_URL = os.getenv("DATABASE_URL")  # si no existe, el servidor funciona sin BD
+# Hook de pruebas: con NIVEL_SEMILLA puesto, todas las partidas sortean el nivel
+# con esa semilla fija, así `probar_build.py` (y cualquier prueba) importa `nivel`
+# y conoce las respuestas de los 5 puzzles. Vacío en producción: sorteo al azar.
+SEMILLA_NIVEL = os.getenv("NIVEL_SEMILLA")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("servidor")
@@ -237,6 +241,8 @@ class Partida:
     (registrar eventos, guardar progreso) los hace manejar_laberinto."""
 
     def __init__(self, rng=None):
+        if rng is None and SEMILLA_NIVEL:
+            rng = random.Random(int(SEMILLA_NIVEL))   # pruebas reproducibles
         self.datos = nivel.cargar()
         self.sorteo = nivel.sortear(rng)
         self.sala_idx = 0                       # 0..4

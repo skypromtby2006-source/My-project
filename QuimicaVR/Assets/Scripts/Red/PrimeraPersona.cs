@@ -19,6 +19,22 @@ public class PrimeraPersona : MonoBehaviour
     Interactuable apuntado;    // lo que la mira está señalando
     Interactuable editando;    // consola que se está ajustando (greybox: campo de valor)
     string textoValor = "";
+    Vector3 empuje;            // solo pruebas: empuja al jugador sin teclado (ver FijarEmpuje)
+
+    // Solo para probar_build.py (PruebaAutomatica): empuja al jugador en una dirección
+    // del mundo, sin teclado, para comprobar que una puerta cerrada lo bloquea de verdad.
+    // En el juego normal nadie lo llama, así que no cambia nada.
+    public void FijarEmpuje(Vector3 dirMundo) => empuje = dirMundo;
+
+    // Solo pruebas: teletransporta al jugador a un punto del mundo (el CharacterController
+    // ignora colliders al moverlo directo, así que hay que apagarlo un instante). Se usa
+    // para dejarlo justo frente a una puerta antes de empujar contra ella.
+    public void ColocarPrueba(Vector3 pos)
+    {
+        cc.enabled = false;
+        transform.position = pos;
+        cc.enabled = true;
+    }
 
     public static PrimeraPersona Crear(Vector3 pos, float sensibilidad)
     {
@@ -67,6 +83,15 @@ public class PrimeraPersona : MonoBehaviour
 
             Apuntar();
             if (entrada.Activar() && apuntado != null) Interactuar(apuntado);
+        }
+
+        // Empuje de prueba (probar_build): se mueve con la MISMA física y el mismo
+        // CharacterController que el juego, así choca con el collider de la puerta.
+        if (empuje != Vector3.zero)
+        {
+            if (cc.isGrounded && vy < 0) vy = -1f;
+            vy -= 9.8f * Time.deltaTime;
+            cc.Move((empuje.normalized * velocidad + Vector3.up * vy) * Time.deltaTime);
         }
 
         if (Time.time >= proximoEnvio)
