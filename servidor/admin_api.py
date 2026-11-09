@@ -60,10 +60,7 @@ class Auditoria:
             self.siguiente_id += 1
             return
         try:
-            async with self.juego.db.acquire() as c:
-                await c.execute(
-                    "INSERT INTO auditoria_admin (admin, accion, objetivo, detalle, ip) VALUES ($1, $2, $3, $4, $5)",
-                    admin, accion, objetivo, json.dumps(detalle, ensure_ascii=False), ip)
+            await self.juego.db.anotar_auditoria(admin, accion, objetivo, detalle, ip)
         except Exception as e:
             log.error("No se pudo guardar la auditoría (%s %s): %s", accion, objetivo, e)
 
@@ -73,14 +70,8 @@ class Auditoria:
             filas = [f for f in reversed(self.memoria) if not accion or f["accion"] == accion]
             return {"total": len(filas), "pagina": pagina, "por_pagina": POR_PAGINA,
                     "acciones": filas[(pagina - 1) * POR_PAGINA: pagina * POR_PAGINA]}
-        donde, args = ("WHERE accion = $1", [accion]) if accion else ("", [])
-        async with self.juego.db.acquire() as c:
-            total = await c.fetchval(f"SELECT count(*) FROM auditoria_admin {donde}", *args)
-            filas = await c.fetch(
-                f"SELECT id, admin, accion, objetivo, detalle, ip, fecha FROM auditoria_admin {donde} "
-                f"ORDER BY id DESC LIMIT {POR_PAGINA} OFFSET {(pagina - 1) * POR_PAGINA}", *args)
-        return {"total": total, "pagina": pagina, "por_pagina": POR_PAGINA,
-                "acciones": [{**dict(f), "detalle": json.loads(f["detalle"] or "{}")} for f in filas]}
+        total, filas = await self.juego.db.listar_auditoria(pagina, POR_PAGINA, accion)
+        return {"total": total, "pagina": pagina, "por_pagina": POR_PAGINA, "acciones": filas}
 
 
 # ----------------------------------------------------------------- vistas del estado en memoria
@@ -137,26 +128,7 @@ async def listar_usuarios(juego, buscar: str, pagina: int) -> dict:
         total = len(filas)
         filas = filas[(pagina - 1) * POR_PAGINA: pagina * POR_PAGINA]
     else:
-        patron = f"%{buscar}%"
-        async with juego.db.acquire() as c:
-            total = await c.fetchval(
-                "SELECT count(*) FROM usuarios WHERE usuario ILIKE $1 OR nombre ILIKE $1", patron)
-            # Los errores salen de eventos (reaccion_fallida), igual que en el perfil del juego:
-            # así cuentan también los de misiones reiniciadas o abandonadas.
-            filas = await c.fetch(f"""
-                SELECT u.usuario, u.nombre, u.color, u.creado, u.ultimo_login, u.bloqueado,
-                       count(m.id) AS completadas,
-                       min(m.duracion_s) FILTER (WHERE m.mision = $2) AS mejor_tiempo_s,
-                       coalesce(e.n, 0) AS errores
-                FROM usuarios u
-                LEFT JOIN misiones_completadas m ON m.usuario_id = u.id
-                LEFT JOIN (SELECT detalle->>'usuario' AS usuario, count(*) AS n FROM eventos
-                           WHERE tipo = 'reaccion_fallida' GROUP BY 1) e ON e.usuario = u.usuario
-                WHERE u.usuario ILIKE $1 OR u.nombre ILIKE $1
-                GROUP BY u.id, e.n
-                ORDER BY u.ultimo_login DESC NULLS LAST
-                LIMIT {POR_PAGINA} OFFSET {(pagina - 1) * POR_PAGINA}""", patron, juego.MISION_AGUA)
-        filas = [dict(f) for f in filas]
+        total, filas = await juego.db.listar_usuarios(buscar, pagina, POR_PAGINA, juego.MISION_AGUA)
     for f in filas:
         f["conectado"] = f["usuario"] in juego.sesiones
         f["bloqueado"] = bool(f.get("bloqueado"))
@@ -196,21 +168,10 @@ async def detalle_usuario(juego, usuario: str) -> dict | None:
         fallos = [{**e["detalle"], "fecha": e["fecha"]} for e in juego.eventos_mem
                   if e["tipo"] == "reaccion_fallida" and e["detalle"].get("usuario") == usuario]
     else:
-        async with juego.db.acquire() as c:
-            fila = await c.fetchrow(
-                "SELECT id, usuario, nombre, color, creado, ultimo_login, bloqueado, motivo_bloqueo "
-                "FROM usuarios WHERE usuario = $1", usuario)
-            if fila is None:
-                return None
-            perfil = dict(fila)
-            uid = perfil.pop("id")
-            perfil["bloqueado"] = bool(perfil["bloqueado"])
-            historial = [dict(h) for h in await c.fetch(
-                "SELECT fecha, mision, sala, duracion_s, errores FROM misiones_completadas "
-                "WHERE usuario_id = $1 ORDER BY fecha DESC LIMIT 200", uid)]
-            fallos = [{**json.loads(e["detalle"]), "fecha": e["fecha"]} for e in await c.fetch(
-                "SELECT detalle, fecha FROM eventos WHERE tipo = 'reaccion_fallida' "
-                "AND detalle->>'usuario' = $1 ORDER BY fecha DESC", usuario)]
+        datos = await juego.db.detalle_usuario(usuario)
+        if datos is None:
+            return None
+        perfil, historial, fallos = datos
     for h in historial:
         h["duracion_s"] = round(h["duracion_s"], 1)
     tiempos = [h["duracion_s"] for h in historial if h["mision"] == juego.MISION_AGUA]
