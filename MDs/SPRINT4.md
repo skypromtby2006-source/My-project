@@ -105,8 +105,8 @@ El servidor lo carga, sortea los números y lo envía en `inicio`. El cliente **
 - [x] **Persistencia SQLite:** si no hay `DATABASE_URL`, usar `quimica.db` (SQLite) junto al ejecutable en vez de memoria. Mismas tablas y mismas consultas del panel. Solo en memoria si SQLite falla. Misma batería de tests de perfiles/progreso contra SQLite.
 - [ ] **PyInstaller (modo carpeta, NO onefile):** `QuimicaServidor.exe` con el servidor del juego + API + `panel/dist`. Al arrancar: mostrar IPs, puerto del juego y URL del panel, y abrir el navegador en `localhost:8000`. Sin `.env`, generar una contraseña de admin al azar, mostrarla y guardarla en `admin.txt`.
 - [ ] **GitHub Actions (windows-latest):** en cada tag `v*`, construir el `.exe` del servidor y subirlo como artefacto. El juego se sigue construyendo con Unity en Arch.
-- [ ] **`empaquetar.sh`:** zip con `Servidor/` (exe) + `Juego/` (build de Windows) + un LEEME de dos pasos (abrir servidor, abrir juego). Docker documentado como la opción de "servidor dedicado".
-- [ ] **`docs/decisiones.md`:** servidor dedicado (Docker + PostgreSQL) vs servidor local (exe + SQLite), y por qué.
+- [x] **`empaquetar.sh`:** zip con `Servidor/` (exe) + `Juego/` (build de Windows) + un LEEME de dos pasos (abrir servidor, abrir juego). Docker documentado como la opción de "servidor dedicado".
+- [x] **`docs/decisiones.md`:** servidor dedicado (Docker + PostgreSQL) vs servidor local (exe + SQLite), y por qué.
 
 ## 7. Fases y criterios de terminado
 - **S4-1:** `pytest` en verde, con un test por sala que la recorra entera (respuestas correctas y una incorrecta por concepto) y con la ventana de 2 s de las palancas. `probar_perfiles` sigue en verde. Reporte.

@@ -32,7 +32,9 @@ Requisitos: Docker con Compose (sin `sudo`), Python 3 y Unity `6000.3.27f1` con 
 | `scripts/probar_build.sh [escenario…]` | Prueba el **build real** de Linux sin ventana contra el servidor de Docker (Wizard/Player entre partidas, salidas de sala, sesión única, reconexión, progreso) → `TODO OK ✔`. Los escenarios `reinicio` y `progreso` reinician el servidor |
 | `scripts/panel_dev.sh` | Panel en modo desarrollo (Vite en http://localhost:5173, recarga al guardar), contra el servidor en :8000 |
 | `scripts/jugar_linux.sh [N]` | Abre N instancias del build de Linux (logs en `logs/`) |
-| `scripts/empaquetar.sh [versión]` | Genera `dist/QuimicaDemo_Windows_<versión>.zip` |
+| `scripts/probar_tests.sh` | pytest del servidor contra memoria, SQLite y PostgreSQL (levanta un PostgreSQL descartable) |
+| `scripts/empaquetar.sh [versión] [--sin-exe]` | Genera `dist/QuimicaDemo_Windows_<versión>.zip` (juego + servidor local `.exe` + servidor dedicado Docker). Toma el `.exe` de `dist/QuimicaServidor/` |
+| `scripts/probar_paquete.sh <zip> [docker\|exe]` | Prueba de humo: descomprime el zip en una carpeta temporal, arranca cada servidor **desde ahí**, corre `probar_cliente` y entra al panel → `PAQUETE OK ✔` |
 
 Los scripts funcionan desde cualquier carpeta del repo.
 
@@ -81,14 +83,18 @@ Panel web para inspeccionar PostgreSQL. Está en el perfil `admin` del compose, 
 
 ## Windows (entrega)
 
-Descomprime `QuimicaDemo_Windows_v0.2.zip` y sigue su `LEEME.txt`:
+Descomprime `QuimicaDemo_Windows_<versión>.zip` y sigue su `LEEME.txt`, que son dos pasos:
 
-1. Instala **Docker Desktop** y espera a que diga *Engine running*.
-2. `Servidor\instalar_servidor.bat`: levanta el servidor y muestra las IP.
-3. Abre `Juego\QuimicaDemo.exe` dos veces y conecta a `127.0.0.1`.
+1. `Servidor\QuimicaServidor.exe`: el **servidor local** (sin instalar nada). Muestra las IP, abre el panel y guarda los datos en `Servidor\quimica.db` (SQLite). Sin `.env`, inventa la contraseña del panel y la deja en `Servidor\admin.txt`.
+2. Abre `Juego\QuimicaDemo.exe` dos veces y conecta a `127.0.0.1`.
 
-Si otra PC de la red no puede conectar, ejecuta `Servidor\abrir_firewall.bat` como administrador.
-Para ver la BD en el navegador: `Servidor\abrir_pgadmin.bat` (ver la sección pgAdmin).
+`ServidorDedicado\` trae la opción con **Docker + PostgreSQL** para un aula entera (`instalar_servidor.bat`, pgAdmin, logs). Ver `docs/decisiones.md` (Sprint 4) para cuándo usar cada uno.
+
+**De dónde sale el `.exe`:** GitHub Actions lo construye en Windows (`.github/workflows/servidor-exe.yml`) en cada tag `v*` y en cada push a `sprint-4` que toque `servidor/` o `panel/`, y le corre `probar_paquete.sh`. Para armar el zip de entrega:
+```bash
+gh run download -R skypromtby2006-source/My-project -n QuimicaServidor_Windows -D dist/   # el último run
+scripts/empaquetar.sh v0.5 && scripts/probar_paquete.sh dist/QuimicaDemo_Windows_v0.5.zip docker
+```
 
 ## Estructura
 
