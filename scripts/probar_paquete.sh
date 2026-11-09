@@ -44,10 +44,10 @@ esperar_log() {  # esperar_log <archivo|comando> <texto> <segundos>
   return 1
 }
 
-verificar_panel() {  # verificar_panel <puerto> <usuario> <contraseña> <modo_bd esperado>
+verificar_panel() {  # verificar_panel <puerto> <usuario> <contraseña> <modo_bd esperado> <línea del arranque>
   "$PY" - "$@" <<'EOF'
-import json, sys, urllib.request
-puerto, usuario, clave, modo_bd = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == "true"
+import json, sys, urllib.parse, urllib.request
+puerto, usuario, clave, modo_bd, arranque = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == "true", sys.argv[5]
 base = f"http://127.0.0.1:{puerto}"
 def pedir(ruta, datos=None, token=None):
     cab = {"Content-Type": "application/json"}
@@ -62,7 +62,12 @@ token = json.loads(pedir("/api/login", {"usuario": usuario, "contrasena": clave}
 estado = json.loads(pedir("/api/estado", token=token))
 assert "conectados" in estado, estado
 assert estado["modo_bd"] is modo_bd, f"modo_bd={estado['modo_bd']}, se esperaba {modo_bd}"
-print(f"  panel OK: página servida, login y /api/estado (modo_bd={estado['modo_bd']}, uptime {estado['uptime_s']} s)")
+# Las líneas del arranque se generan antes de conectar el registro a la BD: tienen
+# que aparecer igual en la página Logs (registro_logs las guarda y las envía al conectar)
+logs = json.loads(pedir("/api/logs?buscar=" + urllib.parse.quote(arranque), token=token))
+assert logs["total"] >= 1, f"el log del arranque \"{arranque}\" no está en la página Logs"
+print(f"  panel OK: página servida, login, /api/estado (modo_bd={estado['modo_bd']}) "
+      f"y el log del arranque \"{arranque}\" en Logs")
 EOF
 }
 
@@ -89,12 +94,37 @@ probar_docker() {
   "$PY" "$dir/servidor/probar_cliente.py" 127.0.0.1 7777 > "$TMP/cliente_docker.log" 2>&1 \
     || { tail -20 "$TMP/cliente_docker.log"; return 1; }
   grep -q "TODO OK" "$TMP/cliente_docker.log" && echo "  probar_cliente: TODO OK ✔"
-  verificar_panel 8000 prueba "$clave" true
+  verificar_panel 8000 prueba "$clave" true "Conectado a PostgreSQL"
   eval "$compose down -v" >/dev/null 2>&1
   echo "  Paquete Docker OK ✔"
 }
 
 # ------------------------------------------------------------------ .exe
+# Carpeta sin permiso de escritura (como "Archivos de programa"): el .exe tiene que
+# explicar qué hacer y salir con código 2, no caerse con una traza de Python.
+probar_sin_escritura() {
+  local exe="$1" dir; dir="$(dirname "$exe")"
+  local quitar
+  if $WINDOWS; then
+    # Se niega crear archivos/carpetas en ESA carpeta (sin herencia: _internal se sigue leyendo)
+    icacls "$(cygpath -w "$dir")" //deny "${USERNAME}:(WD,AD)" >/dev/null
+    quitar="icacls \"$(cygpath -w "$dir")\" //remove:d \"${USERNAME}\""
+  else
+    chmod a-w "$dir"
+    quitar="chmod u+w \"$dir\""
+  fi
+  LIMPIEZA+=("$quitar")   # por si algo falla: si no, la carpeta temporal no se podría borrar
+  local codigo=0
+  (cd "$TMP" && QUIMICA_SIN_NAVEGADOR=1 PUERTO=17777 PUERTO_PANEL=18000 timeout 60 "$exe" </dev/null >"$TMP/exe_ro.log" 2>&1) || codigo=$?
+  eval "$quitar"
+  if [ "$codigo" -ne 2 ] || ! grep -q "descomprime el zip en Documentos o en el Escritorio" "$TMP/exe_ro.log"; then
+    echo "ERROR: en una carpeta de solo lectura el .exe no mostró el aviso (código $codigo):"; cat "$TMP/exe_ro.log"
+    return 1
+  fi
+  [ ! -e "$dir/admin.txt" ] || { echo "ERROR: dejó un admin.txt en la carpeta de solo lectura"; return 1; }
+  echo "  carpeta de solo lectura: muestra \"descomprime el zip en Documentos o en el Escritorio\" y sale (código 2)"
+}
+
 detener_exe() {  # SIGTERM a todo proceso de ese ejecutable; si en 10 s no salió, SIGKILL
   pkill -TERM -f "$1" || return 0
   for _ in $(seq 1 20); do pgrep -f "$1" >/dev/null || return 0; sleep 0.5; done
@@ -107,6 +137,7 @@ probar_exe() {
   [ ! -e "$dir/admin.txt" ] && [ ! -e "$dir/quimica.db" ] || { echo "ERROR: el paquete trae admin.txt o quimica.db (datos de otra PC)"; return 1; }
   local juego=17777 panel=18000
   chmod +x "$exe"   # zipfile no conserva el permiso de ejecución (en Windows no hace falta)
+  probar_sin_escritura "$exe"
   # Se arranca desde OTRA carpeta: los datos tienen que ir junto al ejecutable igual
   # exec: así $! es el PID del servidor y no el de un subshell que lo dejaría huérfano
   (cd "$TMP" && exec env -u DATABASE_URL -u ADMIN_USER -u ADMIN_PASSWORD -u JWT_SECRET -u SQLITE_RUTA \
@@ -129,7 +160,7 @@ probar_exe() {
   "$PY" "$(dirname "$0")/../servidor/probar_cliente.py" 127.0.0.1 $juego > "$TMP/cliente_exe.log" 2>&1 \
     || { tail -20 "$TMP/cliente_exe.log"; echo "--- log del servidor:"; tail -20 "$TMP/exe.log"; return 1; }
   grep -q "TODO OK" "$TMP/cliente_exe.log" && echo "  probar_cliente: TODO OK ✔"
-  verificar_panel $panel "$usuario" "$clave" true
+  verificar_panel $panel "$usuario" "$clave" true "datos en SQLite"
   # Lo que jugó probar_cliente quedó en quimica.db, junto al ejecutable
   "$PY" - "$dir/quimica.db" <<'EOF'
 import sqlite3, sys

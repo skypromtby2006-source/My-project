@@ -43,6 +43,32 @@ def cargar_archivo_env(ruta: pathlib.Path) -> bool:
     return True
 
 
+MENSAJE_SIN_ESCRITURA = """
+  [X] No se puede escribir en la carpeta del servidor:
+        {carpeta}
+      El servidor guarda ahí los perfiles (quimica.db) y la contraseña del
+      panel (admin.txt). Windows no deja escribir en carpetas como
+      "Archivos de programa".
+
+      Solución: descomprime el zip en Documentos o en el Escritorio y abre
+      QuimicaServidor.exe desde ahí.
+      ({error})
+"""
+
+
+def carpeta_escribible(base: pathlib.Path) -> str | None:
+    """None si se puede crear un archivo en `base`; si no, el texto del error.
+    Se prueba creando un archivo de verdad: los permisos de Windows (ACL, UAC) no se
+    pueden deducir de forma confiable con os.access."""
+    prueba = base / f".prueba_escritura_{os.getpid()}"
+    try:
+        prueba.write_bytes(b"")
+        prueba.unlink()
+        return None
+    except OSError as e:
+        return f"{type(e).__name__}: {e}"
+
+
 def contrasena_al_azar(largo: int = 12) -> str:
     """Letras y números sin los que se confunden al copiarlos a mano (0/O, 1/l/I): el
     docente la lee en la ventana y la escribe en el navegador."""
@@ -104,6 +130,16 @@ def main():
         if flujo is not None and hasattr(flujo, "reconfigure"):
             flujo.reconfigure(errors="replace")
     base = carpeta_base()
+    # Antes de tocar nada: sin esto, admin.txt o quimica.db fallarían con una traza
+    # de Python incomprensible y la ventana se cerraría sola.
+    error = carpeta_escribible(base)
+    if error is not None:
+        print(MENSAJE_SIN_ESCRITURA.format(carpeta=base, error=error), flush=True)
+        try:
+            input("  Pulsa Enter para cerrar...")
+        except EOFError:   # sin consola (p. ej. en una prueba automática)
+            pass
+        sys.exit(2)
     admin_txt = preparar_admin(base)
     os.environ.setdefault("SQLITE_RUTA", str(base / "quimica.db"))
     if getattr(sys, "frozen", False):
