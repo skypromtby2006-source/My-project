@@ -16,6 +16,7 @@ import logging
 from datetime import datetime, timezone
 
 MAXIMO_MEMORIA = 2000
+MAXIMO_PREVIOS = 2000   # líneas guardadas antes de conectar la BD (el arranque)
 DIAS_CONSERVADOS = 30
 NIVELES = ("INFO", "WARNING", "ERROR")
 
@@ -24,7 +25,10 @@ class RegistroLogs(logging.Handler):
     def __init__(self):
         super().__init__(level=logging.INFO)
         self.buffer: collections.deque[dict] = collections.deque(maxlen=MAXIMO_MEMORIA)
-        self.pendientes: list[dict] = []          # aún sin guardar en la BD
+        # Aún sin guardar en la BD. Se llena también ANTES de conectarla: así las líneas
+        # del arranque ("Conectado a PostgreSQL", "Servidor escuchando") llegan a la
+        # tabla logs y se ven en el panel. Sin BD nunca, se corta en MAXIMO_PREVIOS.
+        self.pendientes: list[dict] = []
         self.suscriptores: set[asyncio.Queue] = set()  # un WebSocket del panel = una cola
         self.siguiente_id = 1                      # id propio para el modo sin BD
         self.db = None                             # repositorio.Repositorio, o None sin BD
@@ -42,7 +46,7 @@ class RegistroLogs(logging.Handler):
                        "fecha": datetime.fromtimestamp(record.created, timezone.utc).isoformat(timespec="milliseconds")}
             self.siguiente_id += 1
             self.buffer.append(entrada)
-            if self.db is not None:
+            if self.db is not None or len(self.pendientes) < MAXIMO_PREVIOS:
                 self.pendientes.append(entrada)
             for cola in list(self.suscriptores):
                 if cola.full():
@@ -58,6 +62,8 @@ class RegistroLogs(logging.Handler):
         self.db = db
         await db.purgar_logs(DIAS_CONSERVADOS)
         logging.getLogger("servidor").info("Logs de más de %d días borrados", DIAS_CONSERVADOS)
+        # Las líneas del arranque se guardan ya, no en el próximo lote de 2 s
+        await self.vaciar()
 
     async def guardar_en_lotes(self, cada_s: float = 2.0):
         while True:

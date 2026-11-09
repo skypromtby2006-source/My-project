@@ -154,6 +154,8 @@ def estado_limpio():
     server.misiones_mem.clear()
     server.eventos_mem.clear()
     registro_logs.registro.buffer.clear()
+    # Lo que quedó de otro test no debe llegar a la BD del siguiente al conectarla
+    registro_logs.registro.pendientes.clear()
     registro_logs.instalar()
     # El cliente httpx de los tests loguea cada pedido; en el servidor real no existe
     logging.getLogger("httpx").setLevel(logging.WARNING)
