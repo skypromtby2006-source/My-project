@@ -101,7 +101,8 @@ class ServidorLocal:
         env["NIVEL_SEMILLA"] = str(SEMILLA_LAB)
         env["PUERTO"] = str(PUERTO_LAB)
         env["PUERTO_PANEL"] = str(PUERTO_PANEL_LAB)
-        env.pop("DATABASE_URL", None)   # en memoria: no toca la BD de nadie
+        env.pop("DATABASE_URL", None)   # sin PostgreSQL: no toca la BD de nadie
+        env["SQLITE_RUTA"] = ":memory:"  # SQLite en RAM: no deja un quimica.db de la prueba
         self.proc = subprocess.Popen([self._python(), str(RAIZ / "servidor" / "server.py")],
                                      env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(80):

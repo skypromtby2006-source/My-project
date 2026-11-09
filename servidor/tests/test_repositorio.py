@@ -19,13 +19,11 @@ MOTORES = ["sqlite"] + (["postgres"] if os.getenv("DATABASE_URL") else [])
 @pytest_asyncio.fixture(params=MOTORES)
 async def repo(request):
     if request.param == "sqlite":
-        r, _ = repositorio.abrir_sqlite(":memory:")
+        r = repositorio.abrir_sqlite(":memory:")
     else:
-        r, _ = await repositorio.abrir_postgres(os.getenv("DATABASE_URL"))
+        r = await repositorio.abrir_postgres(os.getenv("DATABASE_URL"))
     await r.crear_esquema()
-    if request.param == "postgres":
-        for t in ("misiones_completadas", "eventos", "usuarios", "logs", "auditoria_admin"):
-            await r.bd.execute(f"TRUNCATE {t} RESTART IDENTITY CASCADE")
+    await r.vaciar_todo()
     yield r
     await r.cerrar()
 

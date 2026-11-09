@@ -46,6 +46,10 @@ QuimicaVR/Assets/[Ss]treamingAssets/aa/*
 __pycache__/
 *.py[cod]
 .venv/
+# Datos del servidor local (SQLite): son del que lo corre, no del repo
+quimica.db
+quimica.db-wal
+quimica.db-shm
 
 # ---------- Salidas del proyecto ----------
 Build/

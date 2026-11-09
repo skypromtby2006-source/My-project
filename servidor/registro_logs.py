@@ -4,7 +4,7 @@ Captura de logs del servidor para el panel web.
 Un logging.Handler que, por cada línea de log:
   1. la guarda en un buffer en memoria (las últimas 2000),
   2. la empuja a los WebSocket del panel que estén abiertos (logs en vivo),
-  3. la encola para guardarla en la tabla logs de PostgreSQL.
+  3. la encola para guardarla en la tabla logs de la BD (PostgreSQL o SQLite).
 
 Por qué la BD se escribe en lotes cada 2 s y no en cada línea: un INSERT por línea
 pondría una espera de red dentro de cada log.info() del juego. Con la cola, el juego
@@ -27,7 +27,7 @@ class RegistroLogs(logging.Handler):
         self.pendientes: list[dict] = []          # aún sin guardar en la BD
         self.suscriptores: set[asyncio.Queue] = set()  # un WebSocket del panel = una cola
         self.siguiente_id = 1                      # id propio para el modo sin BD
-        self.db = None
+        self.db = None                             # repositorio.Repositorio, o None sin BD
 
     def emit(self, record: logging.LogRecord):
         try:
@@ -54,12 +54,10 @@ class RegistroLogs(logging.Handler):
 
     # --------------------------------------------------------- base de datos
     async def conectar_bd(self, db):
-        """Activa la escritura en PostgreSQL y borra los logs de más de 30 días."""
+        """Activa la escritura en la BD y borra los logs de más de 30 días."""
         self.db = db
-        async with db.acquire() as c:
-            borrados = await c.execute(
-                f"DELETE FROM logs WHERE fecha < now() - interval '{DIAS_CONSERVADOS} days'")
-        logging.getLogger("servidor").info("Logs de más de %d días borrados (%s)", DIAS_CONSERVADOS, borrados)
+        await db.purgar_logs(DIAS_CONSERVADOS)
+        logging.getLogger("servidor").info("Logs de más de %d días borrados", DIAS_CONSERVADOS)
 
     async def guardar_en_lotes(self, cada_s: float = 2.0):
         while True:
@@ -71,10 +69,8 @@ class RegistroLogs(logging.Handler):
             return
         lote, self.pendientes = self.pendientes, []
         try:
-            async with self.db.acquire() as c:
-                await c.executemany(
-                    "INSERT INTO logs (nivel, mensaje, fecha) VALUES ($1, $2, $3)",
-                    [(e["nivel"], e["mensaje"], datetime.fromisoformat(e["fecha"])) for e in lote])
+            await self.db.guardar_logs(
+                [(e["nivel"], e["mensaje"], datetime.fromisoformat(e["fecha"])) for e in lote])
         except Exception as e:
             # No se usa log.warning: esa línea volvería a entrar en la cola y, con la BD
             # caída, se generaría una línea nueva cada 2 s para siempre.
@@ -92,19 +88,7 @@ class RegistroLogs(logging.Handler):
             return {"total": total, "pagina": pagina, "por_pagina": por_pagina, "logs": filas}
         # Antes de consultar se vacía la cola: si no, lo último que se ve en vivo no aparecería
         await self.vaciar()
-        condiciones, args = [], []
-        if nivel:
-            args.append(nivel)
-            condiciones.append(f"nivel = ${len(args)}")
-        if buscar:
-            args.append(f"%{buscar}%")
-            condiciones.append(f"mensaje ILIKE ${len(args)}")
-        donde = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
-        async with self.db.acquire() as c:
-            total = await c.fetchval(f"SELECT count(*) FROM logs {donde}", *args)
-            filas = await c.fetch(
-                f"SELECT id, nivel, mensaje, fecha FROM logs {donde} ORDER BY id DESC "
-                f"LIMIT {por_pagina} OFFSET {(pagina - 1) * por_pagina}", *args)
+        total, filas = await self.db.consultar_logs(nivel, buscar, pagina, por_pagina)
         return {"total": total, "pagina": pagina, "por_pagina": por_pagina,
                 "logs": [{"id": f["id"], "nivel": f["nivel"], "mensaje": f["mensaje"],
                           "fecha": f["fecha"].isoformat(timespec="milliseconds")} for f in filas]}

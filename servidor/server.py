@@ -42,7 +42,7 @@ import nivel  # el nivel es un dato: carga, sorteo y validación del laberinto (
 
 HOST = "0.0.0.0"
 PUERTO = int(os.getenv("PUERTO", "7777"))
-DATABASE_URL = os.getenv("DATABASE_URL")  # si no existe, el servidor funciona sin BD
+DATABASE_URL = os.getenv("DATABASE_URL")  # si no existe, el servidor usa SQLite (quimica.db)
 # Hook de pruebas: con NIVEL_SEMILLA puesto, todas las partidas sortean el nivel
 # con esa semilla fija, así `probar_build.py` (y cualquier prueba) importa `nivel`
 # y conoce las respuestas de los 5 puzzles. Vacío en producción: sorteo al azar.
@@ -51,7 +51,7 @@ SEMILLA_NIVEL = os.getenv("NIVEL_SEMILLA")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("servidor")
 
-db = None  # pool de asyncpg (opcional)
+db = None  # repositorio.Repositorio (PostgreSQL o SQLite); None = solo memoria
 
 # ----------------------------------------------------------------- perfiles
 # La misma paleta está en ClienteRed.cs; el cliente solo la usa para dibujar
@@ -385,71 +385,48 @@ def nuevo_codigo() -> str:
 
 
 # ----------------------------------------------------------------- base de datos
+def ruta_sqlite() -> str:
+    """Dónde va `quimica.db` del servidor local. SQLITE_RUTA la cambia (`:memory:` =
+    SQLite en RAM, lo usa probar_build.py para no dejar archivos). Si no, va junto al
+    ejecutable (PyInstaller) o junto a server.py: así el .exe guarda sus datos en su
+    propia carpeta y no en la carpeta desde la que se lo abrió."""
+    if os.getenv("SQLITE_RUTA"):
+        return os.environ["SQLITE_RUTA"]
+    base = os.path.dirname(sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__))
+    return os.path.join(base, "quimica.db")
+
+
 async def iniciar_bd():
+    """PostgreSQL si hay DATABASE_URL (servidor dedicado, Docker); si no, SQLite en un
+    archivo (servidor local). Solo si los dos fallan, memoria. Todo el SQL está en
+    repositorio.py y es el mismo para los dos motores."""
     global db
-    if not DATABASE_URL:
-        log.warning("Sin DATABASE_URL: perfiles y progreso solo en memoria, se pierden al cerrar el servidor")
+    import repositorio
+    if DATABASE_URL:
+        for intento in range(1, 11):
+            try:
+                db = await repositorio.abrir_postgres(DATABASE_URL)
+                # Las tablas se crean aquí y no con un .sql en docker-entrypoint-initdb.d:
+                # Postgres solo corre esos scripts con el volumen vacío, y datos_db ya
+                # existe en las instalaciones anteriores.
+                await db.crear_esquema()
+                log.info("Conectado a PostgreSQL")
+                return
+            except Exception as e:
+                log.warning("BD no disponible (intento %d/10): %s", intento, e)
+                db = None
+                await asyncio.sleep(2)
+        log.error("No se pudo conectar a PostgreSQL; perfiles y progreso solo en memoria, se pierden al cerrar")
         return
-    import asyncpg
-    for intento in range(1, 11):
-        try:
-            db = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=5)
-            # Las tablas se crean aquí y no con un .sql en docker-entrypoint-initdb.d:
-            # Postgres solo corre esos scripts con el volumen vacío, y datos_db ya
-            # existe en las instalaciones anteriores.
-            async with db.acquire() as c:
-                await c.execute("""
-                    CREATE TABLE IF NOT EXISTS eventos (
-                        id SERIAL PRIMARY KEY,
-                        tipo TEXT NOT NULL,
-                        detalle JSONB,
-                        fecha TIMESTAMPTZ DEFAULT now()
-                    );
-                    CREATE TABLE IF NOT EXISTS usuarios (
-                        id SERIAL PRIMARY KEY,
-                        usuario TEXT UNIQUE NOT NULL,
-                        nombre TEXT NOT NULL,
-                        color TEXT NOT NULL,
-                        creado TIMESTAMPTZ DEFAULT now(),
-                        ultimo_login TIMESTAMPTZ
-                    );
-                    CREATE TABLE IF NOT EXISTS misiones_completadas (
-                        id SERIAL PRIMARY KEY,
-                        usuario_id INT REFERENCES usuarios(id),
-                        mision TEXT NOT NULL,
-                        sala TEXT NOT NULL,
-                        duracion_s REAL NOT NULL,
-                        errores INT NOT NULL,
-                        fecha TIMESTAMPTZ DEFAULT now()
-                    );
-                    CREATE INDEX IF NOT EXISTS misiones_por_usuario ON misiones_completadas (usuario_id);
-                    -- Sprint 3: panel web
-                    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS bloqueado BOOLEAN DEFAULT false;
-                    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS motivo_bloqueo TEXT;
-                    CREATE TABLE IF NOT EXISTS logs (
-                        id SERIAL PRIMARY KEY,
-                        nivel TEXT NOT NULL,
-                        mensaje TEXT NOT NULL,
-                        fecha TIMESTAMPTZ DEFAULT now()
-                    );
-                    CREATE INDEX IF NOT EXISTS logs_por_fecha ON logs (fecha);
-                    CREATE TABLE IF NOT EXISTS auditoria_admin (
-                        id SERIAL PRIMARY KEY,
-                        admin TEXT NOT NULL,
-                        accion TEXT NOT NULL,
-                        objetivo TEXT,
-                        detalle JSONB,
-                        ip TEXT,
-                        fecha TIMESTAMPTZ DEFAULT now()
-                    );
-                    CREATE INDEX IF NOT EXISTS eventos_por_tipo ON eventos (tipo)""")
-            log.info("Conectado a PostgreSQL")
-            return
-        except Exception as e:
-            log.warning("BD no disponible (intento %d/10): %s", intento, e)
-            await asyncio.sleep(2)
-    db = None
-    log.error("No se pudo conectar a la BD; perfiles y progreso solo en memoria, se pierden al cerrar")
+    ruta = ruta_sqlite()
+    try:
+        db = repositorio.abrir_sqlite(ruta)
+        await db.crear_esquema()
+        log.info("Sin DATABASE_URL: datos en SQLite (%s)", ruta)
+    except Exception as e:
+        db = None
+        log.error("No se pudo abrir SQLite en %s (%s); perfiles y progreso solo en memoria, "
+                  "se pierden al cerrar el servidor", ruta, e)
 
 
 async def registrar(tipo: str, detalle: dict):
@@ -457,22 +434,17 @@ async def registrar(tipo: str, detalle: dict):
         eventos_mem.append({"tipo": tipo, "detalle": detalle, "fecha": datetime.now(timezone.utc)})
         return
     try:
-        async with db.acquire() as c:
-            await c.execute("INSERT INTO eventos (tipo, detalle) VALUES ($1, $2)",
-                            tipo, json.dumps(detalle, ensure_ascii=False))
+        await db.registrar(tipo, detalle)
     except Exception as e:
         log.warning("No se pudo registrar evento: %s", e)
 
 
-# Cada función tiene dos caminos (BD y memoria) para que el Plan B2, sin Docker,
-# siga funcionando igual salvo por la persistencia.
+# Cada función tiene dos caminos (BD y memoria) para que el servidor siga funcionando
+# aunque no haya ninguna BD, salvo por la persistencia. El SQL está en repositorio.py.
 async def buscar_usuario(usuario: str) -> dict | None:
     if db is None:
         return usuarios_mem.get(usuario)
-    async with db.acquire() as c:
-        fila = await c.fetchrow("SELECT id, usuario, nombre, color, bloqueado, motivo_bloqueo "
-                                "FROM usuarios WHERE usuario = $1", usuario)
-    return dict(fila) if fila else None
+    return await db.buscar_usuario(usuario)
 
 
 async def crear_usuario(usuario: str, nombre: str, color: str) -> dict | None:
@@ -484,30 +456,21 @@ async def crear_usuario(usuario: str, nombre: str, color: str) -> dict | None:
         usuarios_mem[usuario] = {"id": None, "usuario": usuario, "nombre": nombre, "color": color,
                                  "creado": ahora, "ultimo_login": ahora}
         return usuarios_mem[usuario]
-    # ON CONFLICT en vez de consultar antes: si dos clientes registran el mismo
-    # usuario a la vez, la restricción UNIQUE decide sin carrera.
-    async with db.acquire() as c:
-        fila = await c.fetchrow(
-            "INSERT INTO usuarios (usuario, nombre, color, ultimo_login) VALUES ($1, $2, $3, now()) "
-            "ON CONFLICT (usuario) DO NOTHING RETURNING id, usuario, nombre, color",
-            usuario, nombre, color)
-    return dict(fila) if fila else None
+    return await db.crear_usuario(usuario, nombre, color)
 
 
 async def marcar_login(usuario: str):
     if db is None:
         usuarios_mem[usuario]["ultimo_login"] = datetime.now(timezone.utc)
     else:
-        async with db.acquire() as c:
-            await c.execute("UPDATE usuarios SET ultimo_login = now() WHERE usuario = $1", usuario)
+        await db.marcar_login(usuario)
 
 
 async def actualizar_usuario(usuario: str, nombre: str, color: str):
     if db is None:
         usuarios_mem[usuario].update(nombre=nombre, color=color)
-        return
-    async with db.acquire() as c:
-        await c.execute("UPDATE usuarios SET nombre = $2, color = $3 WHERE usuario = $1", usuario, nombre, color)
+    else:
+        await db.actualizar_usuario(usuario, nombre, color)
 
 
 async def guardar_mision(j: "Jugador", sala: str, duracion_s: float, errores: int, mision: str = MISION_AGUA):
@@ -516,10 +479,7 @@ async def guardar_mision(j: "Jugador", sala: str, duracion_s: float, errores: in
                              "duracion_s": duracion_s, "errores": errores,
                              "fecha": datetime.now(timezone.utc)})
         return
-    async with db.acquire() as c:
-        await c.execute(
-            "INSERT INTO misiones_completadas (usuario_id, mision, sala, duracion_s, errores) "
-            "VALUES ($1, $2, $3, $4, $5)", j.usuario_id, mision, sala, duracion_s, errores)
+    await db.guardar_mision(j.usuario_id, mision, sala, duracion_s, errores)
 
 
 async def progreso(j: "Jugador") -> dict:
@@ -532,17 +492,7 @@ async def progreso(j: "Jugador") -> dict:
         completadas, mejor, errores = len(propias), min(tiempos, default=None), errores_mem.get(j.usuario, 0)
         historial = sorted(propias, key=lambda x: x["fecha"], reverse=True)[:5]
     else:
-        async with db.acquire() as c:
-            fila = await c.fetchrow(
-                "SELECT count(*) AS n, min(duracion_s) FILTER (WHERE mision = $2) AS mejor "
-                "FROM misiones_completadas WHERE usuario_id = $1", j.usuario_id, MISION_AGUA)
-            errores = await c.fetchval(
-                "SELECT count(*) FROM eventos WHERE tipo = 'reaccion_fallida' AND detalle->>'usuario' = $1",
-                j.usuario)
-            historial = await c.fetch(
-                "SELECT fecha, duracion_s, errores FROM misiones_completadas "
-                "WHERE usuario_id = $1 ORDER BY fecha DESC LIMIT 5", j.usuario_id)
-        completadas, mejor = fila["n"], fila["mejor"]
+        completadas, mejor, errores, historial = await db.progreso(j.usuario, j.usuario_id, MISION_AGUA)
     return {
         "completadas": completadas,
         # 0 = todavía sin misiones: JsonUtility no lee null en un float
@@ -686,12 +636,8 @@ async def cambiar_bloqueo(usuario: str, bloqueado: bool, motivo: str) -> bool:
         if usuario not in usuarios_mem:
             return False
         usuarios_mem[usuario].update(bloqueado=bloqueado, motivo_bloqueo=motivo if bloqueado else None)
-    else:
-        async with db.acquire() as c:
-            r = await c.execute("UPDATE usuarios SET bloqueado = $2, motivo_bloqueo = $3 WHERE usuario = $1",
-                                usuario, bloqueado, motivo if bloqueado else None)
-        if r == "UPDATE 0":
-            return False
+    elif not await db.fijar_bloqueo(usuario, bloqueado, motivo if bloqueado else None):
+        return False
     log.warning("Usuario %s %s: %s", usuario, "bloqueado" if bloqueado else "desbloqueado", motivo)
     if bloqueado and usuario in sesiones:
         await expulsar(sesiones[usuario], f"Cuenta bloqueada: {motivo}")
