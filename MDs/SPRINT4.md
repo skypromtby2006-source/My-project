@@ -103,8 +103,8 @@ El servidor lo carga, sortea los números y lo envía en `inicio`. El cliente **
 ## 6.1 Servidor local en un solo `.exe` (🟡, PM 09/11 — después de cerrar S4-2)
 > Para una PC sin Docker (el docente, o la prueba en Windows): un servidor local que se abre con doble clic. El servidor dedicado (Docker + PostgreSQL) sigue siendo la opción recomendada para varios equipos.
 - [x] **Persistencia SQLite:** si no hay `DATABASE_URL`, usar `quimica.db` (SQLite) junto al ejecutable en vez de memoria. Mismas tablas y mismas consultas del panel. Solo en memoria si SQLite falla. Misma batería de tests de perfiles/progreso contra SQLite.
-- [ ] **PyInstaller (modo carpeta, NO onefile):** `QuimicaServidor.exe` con el servidor del juego + API + `panel/dist`. Al arrancar: mostrar IPs, puerto del juego y URL del panel, y abrir el navegador en `localhost:8000`. Sin `.env`, generar una contraseña de admin al azar, mostrarla y guardarla en `admin.txt`.
-- [ ] **GitHub Actions (windows-latest):** en cada tag `v*`, construir el `.exe` del servidor y subirlo como artefacto. El juego se sigue construyendo con Unity en Arch.
+- [x] **PyInstaller (modo carpeta, NO onefile):** `QuimicaServidor.exe` con el servidor del juego + API + `panel/dist`. Al arrancar: mostrar IPs, puerto del juego y URL del panel, y abrir el navegador en `localhost:8000`. Sin `.env`, generar una contraseña de admin al azar, mostrarla y guardarla en `admin.txt`.
+- [x] **GitHub Actions (windows-latest):** en cada tag `v*`, construir el `.exe` del servidor y subirlo como artefacto. El juego se sigue construyendo con Unity en Arch.
 - [x] **`empaquetar.sh`:** zip con `Servidor/` (exe) + `Juego/` (build de Windows) + un LEEME de dos pasos (abrir servidor, abrir juego). Docker documentado como la opción de "servidor dedicado".
 - [x] **`docs/decisiones.md`:** servidor dedicado (Docker + PostgreSQL) vs servidor local (exe + SQLite), y por qué.
 
