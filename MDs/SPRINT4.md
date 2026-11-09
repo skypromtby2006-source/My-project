@@ -106,3 +106,5 @@ El servidor lo carga, sortea los números y lo envía en `inicio`. El cliente **
 - **S4-3 (🧑):** jugar el nivel completo en pareja (dos ventanas) y anotar qué sala aburre, cuál confunde y cuál es demasiado fácil. 🤖 ajusta los números o las tareas.
 - **S4-4:** assets e iluminación aplicados; 🧑 aprueba con capturas de cada sala. Rendimiento ≥ 60 FPS en la PC de Jona (mostrar FPS con F3).
 - **S4-5:** prueba integral con el panel abierto (estadísticas por concepto), build de Linux y Windows, merge, tag `v0.5-demo` y reporte final.
+  - **Migrar el panel a "errores por concepto" y borrar el modo agua por completo** (decisión S4-1): pasar `estadisticas.py`, `admin_api.py`, el frontend React (`Estadisticas.jsx`, `UsuarioDetalle.jsx`) y sus tests de *errores por elemento* a *errores por concepto* (balanceo/mol/masa/limitante/rendimiento), y eliminar la misión "Sintetizar agua" del servidor, el cliente y los tests.
+    **Criterio de terminado:** `grep -rinE "sintetizar agua|MISION_AGUA|reaccion_fallida|errores_por_elemento|modo.*agua|\"agua\"" servidor QuimicaVR panel` devuelve **0 referencias**, y `pytest` sigue en verde.

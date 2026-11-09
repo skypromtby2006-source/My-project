@@ -277,11 +277,19 @@ class Partida:
         return s
 
     def inicio_info(self) -> dict:
+        # Incluye el layout estático de las salas (ids y posiciones de consolas,
+        # palancas, montacargas y puertas) para que el cliente construya el nivel
+        # (SPRINT4 §3.1). NO lleva las respuestas: esas viven en `resp` del sorteo,
+        # del lado del servidor. Los números visibles de la sala actual van en
+        # sala_estado.datos.
+        salas = [{k: v for k, v in s.items() if not str(k).startswith("_")}
+                 for s in self.datos["salas"]]
         return {
             "nivel": self.datos["id"],
             "lados": self.datos["lados"],
             "ventana_palanca_s": self.datos.get("ventana_palanca_s", 2.0),
             "total_salas": len(self.datos["salas"]),
+            "salas": salas,
             "sala": self.sala_estado(),
         }
 
