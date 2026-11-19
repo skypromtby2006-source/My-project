@@ -22,6 +22,7 @@ namespace Quimica.EditorTools
         {
             ConfigurarDemo.AsegurarRecursos();
             ConfigurarDemo.AplicarPlayerSettings();
+            ConfigurarUI.AsegurarPanel();   // el menú de UI Toolkit lo carga desde Resources
             AssetDatabase.SaveAssets();
 
             var escenas = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray();

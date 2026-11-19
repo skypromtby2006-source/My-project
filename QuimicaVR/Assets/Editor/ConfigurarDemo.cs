@@ -36,6 +36,7 @@ namespace Quimica.EditorTools
 
             AsegurarRecursos();
             AplicarPlayerSettings();
+            ConfigurarUI.AsegurarPanel();
             AssetDatabase.SaveAssets();
             Debug.Log("[Quimica] Escena demo configurada en " + RutaEscena);
         }

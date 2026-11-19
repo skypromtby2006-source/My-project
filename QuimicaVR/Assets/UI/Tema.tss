@@ -1,0 +1,4 @@
+/* Tema base de los paneles en tiempo de ejecución: trae los estilos por defecto de
+   los controles (campo de texto, slider, scroll). Los colores del juego van encima,
+   en Resources/UI/Estilos.uss, con los tokens del diseño (SPRINT_UI §1). */
+@import url("unity-theme://default");
