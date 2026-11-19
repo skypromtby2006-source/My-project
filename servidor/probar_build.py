@@ -22,6 +22,7 @@ import os
 import pathlib
 import queue
 import random
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -35,6 +36,8 @@ IP, PUERTO = "127.0.0.1", 7777
 PUERTO_LAB, PUERTO_PANEL_LAB = 7788, 8008   # servidor propio del escenario laberinto
 SEMILLA_LAB = 123                            # debe coincidir con el NIVEL_SEMILLA del servidor
 SENALES = pathlib.Path(tempfile.mkdtemp(prefix="quimica_prueba_"))
+# Capturas de cada sala (escenario laberinto): quedan para mirarlas después de la corrida
+CAPTURAS = RAIZ / "logs" / "capturas"
 MSG_WIZARD_SALIO = "El Wizard salió, la sala se cerró"
 
 # El nivel es un dato (nivel.py): con la misma semilla que el servidor, el
@@ -131,13 +134,26 @@ class ServidorLocal:
 class Build:
     """Una instancia del juego. Los pasos son los de PruebaAutomatica.cs."""
 
-    def __init__(self, nombre, pasos):
+    def __init__(self, nombre, pasos, graficos=False):
         self.nombre = nombre
         self.cola = queue.Queue()
         self.log = open(RAIZ / "logs" / f"prueba_{nombre}.log", "w", encoding="utf-8")
+        args = [str(JUEGO), "-batchmode", "-logFile", "-", "-prueba", ";".join(pasos),
+                "-ip", IP, "-puerto", str(PUERTO), "-senales", str(SENALES)]
+        if graficos:
+            # Las capturas necesitan GPU. En -batchmode igual no se abre ninguna ventana,
+            # pero el player de Linux necesita un servidor gráfico para crear el contexto:
+            # sin DISPLAY se cuelga (OpenGL) o se cae (Vulkan). Sin sesión gráfica -> Xvfb.
+            args += ["-capturas", str(CAPTURAS / nombre)]
+            if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+                if not shutil.which("xvfb-run"):
+                    raise RuntimeError("las capturas necesitan una sesión gráfica o xvfb-run "
+                                       "(sudo pacman -S xorg-server-xvfb)")
+                args = ["xvfb-run", "-a", "-s", "-screen 0 1280x720x24"] + args
+        else:
+            args.insert(2, "-nographics")
         self.proc = subprocess.Popen(
-            [str(JUEGO), "-batchmode", "-nographics", "-logFile", "-", "-prueba", ";".join(pasos),
-             "-ip", IP, "-puerto", str(PUERTO), "-senales", str(SENALES)],
+            args,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
         threading.Thread(target=self._leer, daemon=True).start()
         builds.append(self)
@@ -314,6 +330,23 @@ async def escenario_reinicio(s):
     await reiniciar_servidor()  # deja el servidor escuchando para el siguiente escenario
 
 
+def comprobar_capturas(r):
+    """El arte, verificado sin que nadie juegue: una captura por sala y por lado desde la
+    cámara del jugador. Los umbrales separan "se ve algo" de una imagen negra, quemada,
+    plana o con el magenta de un shader faltante; que se vea BIEN lo juzga una persona
+    mirando los PNG de logs/capturas/."""
+    print(f"  capturas con {r['dispositivo']} en {CAPTURAS / 'laberinto'}")
+    comprobar(r["shaders_error"] == 0, f"ningún material del nivel con shader faltante ({r['renderers']} renderers)", r)
+    salas = {c["sala"] for c in r["capturas"]}
+    comprobar(len(salas) == len(nivel.cargar()["salas"]) and len(r["capturas"]) == 2 * len(salas),
+              f"una captura por sala y por lado ({len(r['capturas'])} imágenes)", [c["archivo"] for c in r["capturas"]])
+    for c in r["capturas"]:
+        lum, con, mag = c["luminancia"], c["contraste"], c["magenta"]
+        detalle = f"luminancia {lum:.2f} · contraste {con:.2f} · magenta {mag:.1%} → {c['archivo']}"
+        comprobar(0.06 <= lum <= 0.94 and con >= 0.03 and mag < 0.01,
+                  f"sala {c['sala']} ({c['nombre']}), lado {c['lado']}: se ve algo", detalle)
+
+
 async def escenario_laberinto(s):
     """Laberinto (S4), con el Wizard en el build y el Player como bot, contra un
     servidor propio con semilla fija:
@@ -341,9 +374,9 @@ async def escenario_laberinto(s):
 
     try:
         await srv.arrancar()
-        build = Build("laberinto", [
+        build = Build("laberinto", graficos=True, pasos=[
             "conectar", f"registro|{w}|WLab{s}|#3FA9F5", *A_SALAS,
-            *partida("p1"), "reporte|p1_inicio",
+            *partida("p1"), "reporte|p1_inicio", "capturas",
             ESTE_DE_D1, EMPUJE_OESTE, "esperar|0.2", "reporte|dc_cerrada",
             f"dial|dial_h2|{h2}", "marca|s1_wiz_listo", "esperar_senal|s1_baja", "palanca|D1",
             "esperar_sala|2", "reporte|sala2",
@@ -363,6 +396,7 @@ async def escenario_laberinto(s):
         comprobar(r["escena"] and r["sala_lab"] == 1, "laberinto: el Wizard entra a la sala 1", r)
         remoto = next((x for x in r["remotos"] if x["id"] == bot.id), None)
         comprobar(remoto is not None, "B1: el Wizard ve la cápsula del Player", r["remotos"])
+        comprobar_capturas(await build.esperar("REPORTE capturas", timeout=90))
 
         r = await build.esperar("REPORTE dc_cerrada")
         comprobar(r["local_x"] > 9.0, "la puerta CERRADA bloquea: el Wizard no la cruza", r["local_x"])

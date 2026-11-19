@@ -31,6 +31,9 @@ public class GeneradorNivel
     Vector3 Mundo(string lado, int col, int row, float y) =>
         new Vector3(OrigenX(lado) + col * CELDA, y, -row * CELDA);
 
+    // Para PruebaAutomatica (capturas por sala): la misma conversión celda -> mundo del nivel
+    public Vector3 CentroCelda(string lado, int col, int row, float y) => Mundo(lado, col, row, y);
+
     public Vector3 AparicionMundo(string lado)
     {
         var l = lado == "wizard" ? nivel.lados.wizard : nivel.lados.player;

@@ -35,6 +35,7 @@ public class GestorPartida : MonoBehaviour
     public IEnumerable<string> IdsRemotos => remotos.Keys;
     public Vector3 DestinoRemoto(string id) => remotos[id].destino;
     public PrimeraPersona JugadorLocal => primeraPersona;   // laberinto: para el empuje de prueba
+    public GeneradorNivel Generador => generador;           // laberinto: para las capturas de prueba
 
     class Esfera
     {
