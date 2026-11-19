@@ -6,7 +6,8 @@
 #   docker  ServidorDedicado/: docker compose up --build con lo que trae el zip
 #   exe     QuimicaServidor(.exe): el servidor local de PyInstaller
 #   todo    los que el zip traiga (falla si no trae ninguno)
-# Para cada uno: corre probar_cliente.py contra el juego, entra al panel con usuario y
+# Para cada uno: corre probar_cliente.py contra el juego (modo agua y una partida del
+# laberinto, que lee servidor/niveles/: sin ellos falla), entra al panel con usuario y
 # contraseña y pide /api/estado. Del .exe verifica además admin.txt y quimica.db.
 #
 # Corre en Arch y en el runner Windows de GitHub Actions (Git Bash).

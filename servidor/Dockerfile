@@ -15,6 +15,9 @@ WORKDIR /app
 COPY servidor/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY servidor/*.py ./
+# Los niveles del laberinto (JSON) los lee nivel.cargar() al iniciar cada partida:
+# sin esta línea el servidor de Docker no podía arrancar el juego (bug de la S4, UI-1).
+COPY servidor/niveles ./niveles
 COPY --from=panel /panel/dist ./panel_dist
 ENV PYTHONUNBUFFERED=1
 EXPOSE 7777 8000
