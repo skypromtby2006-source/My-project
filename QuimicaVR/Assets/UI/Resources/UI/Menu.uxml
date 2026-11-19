@@ -1,0 +1,46 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <!-- Diseño: MDs/diseno_ui/Menu.dc.html. Historia y Laboratorio quedan "Próxima fase"
+         (son los otros dos pilares del proyecto); sin el chip de "progreso sincronizado",
+         porque la nube todavía no existe (SPRINT_UI §3). -->
+    <Style src="Estilos.uss" />
+    <ui:VisualElement name="menu" class="pantalla g36">
+        <ui:VisualElement class="row entre">
+            <ui:Label text="QUÍMICA VR" class="marca" />
+            <ui:VisualElement name="chip-perfil" class="chip-perfil" />
+        </ui:VisualElement>
+
+        <ui:VisualElement>
+            <ui:Label text="Menú principal" class="h1" style="margin-bottom: 6px;" />
+            <ui:Label text="Elige cómo quieres jugar" class="lbl" />
+        </ui:VisualElement>
+
+        <ui:VisualElement class="row estirar g24 grow">
+            <ui:VisualElement class="card grow g14">
+                <ui:Label text="Próxima fase" class="chip" />
+                <ui:Label text="Modo historia" class="h2-lg" />
+                <ui:Label text="Avanza resolviendo puzles de enlaces y reacciones." class="parrafo grow" />
+                <ui:Button text="Jugar" class="btn sec" enabled="false" />
+            </ui:VisualElement>
+            <ui:VisualElement class="card card-destacada grow g14">
+                <ui:Label text="Disponible" class="chip ok" />
+                <ui:Label text="Multijugador" class="h2-lg" />
+                <ui:Label text="Coopera con tus compañeros en el laberinto: el Wizard de un lado, los Players del otro." class="parrafo grow" />
+                <ui:Button name="ver-salas" text="Ver salas" class="btn" />
+            </ui:VisualElement>
+            <ui:VisualElement class="card grow g14">
+                <ui:Label text="Próxima fase" class="chip" />
+                <ui:Label text="Laboratorio" class="h2-lg" />
+                <ui:Label text="Espacio libre para experimentar con reacciones." class="parrafo grow" />
+                <ui:Button text="Entrar" class="btn sec" enabled="false" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement class="row g14">
+            <ui:Button name="perfil" text="Perfil" class="btn sec" />
+            <!-- Todavía no hay ajustes fuera de la partida: la sensibilidad está en la pausa -->
+            <ui:Button name="ajustes" text="Ajustes" class="btn sec" enabled="false" tooltip="Próxima fase: la sensibilidad del mouse está en la pausa (ESC)" />
+            <ui:VisualElement class="grow" />
+            <ui:Button name="cerrar-sesion" text="Cerrar sesión" class="btn sec" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

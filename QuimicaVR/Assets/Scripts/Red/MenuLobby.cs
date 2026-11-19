@@ -1,32 +1,37 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using UnityEngine;
+using UnityEngine.UIElements;
 
-// Menú completo con IMGUI: no hace falta armar Canvas ni prefabs.
-// Pantallas: Conexión -> Perfil (iniciar sesión / crear) -> Lista de salas -> Dentro de la sala -> Partida
-// Desde la lista o desde la sala, "Mi perfil" abre EditarPerfil y "Volver" regresa.
+// Estado del menú y acciones (SPRINT_UI §2): qué pantalla se ve y qué pasa al tocar un
+// botón. Las pantallas de UI Toolkit (Scripts/UI/Pantalla*.cs) solo leen este estado y
+// llaman a estas acciones; PruebaAutomatica llama a las MISMAS, así la prueba del build
+// recorre el mismo código que un clic.
+// Pantallas: Login -> Menú -> Salas -> Sala -> Partida. Desde el Menú, "Perfil" abre Mi perfil.
 public class MenuLobby : MonoBehaviour
 {
-    enum Pantalla { Conexion, Perfil, Salas, Sala, EditarPerfil, Partida }
-    Pantalla pantalla = Pantalla.Conexion;
+    enum Pantalla { Login, Menu, Salas, Sala, Perfil, Partida }
+    Pantalla pantalla = Pantalla.Login;
 
     string ip = "127.0.0.1", puerto = "7777";
     string nombreSala = "Laboratorio 1", codigo = "", aviso = "", info = "";
+    string errorConexion = "";   // el último fallo al conectar o la caída: va en el chip del Login
     int maximo = 4;
     bool listo;
     float proximoRefresco;
     Vector2 scroll;
     Mensaje ultimaLista;
 
-    // Perfil: pestaña 0 = iniciar sesión, 1 = crear. Los mismos campos sirven para editar.
+    // Perfil: pestaña 0 = entrar, 1 = crear cuenta. Los mismos campos sirven para editar.
     int pestana;
     string usuario = "", nombrePerfil = "", colorPerfil = ClienteRed.Paleta[0];
     bool guardando;   // para distinguir la respuesta a "Guardar" de la de "perfil_ver"
 
     // HUD: los mensajes del reactor y los errores se muestran unos segundos
     float tMensaje = -99, tAviso = -99;
-    // Aviso global del panel web: banner amarillo arriba durante 6 s, en cualquier pantalla
+    // Aviso global del panel web: banner arriba durante 6 s, en cualquier pantalla
     const float DuracionAvisoGlobal = 6f;
     string avisoGlobal = "";
     float tAvisoGlobal = -99;
@@ -39,15 +44,24 @@ public class MenuLobby : MonoBehaviour
     // la regla de verdad la impone el servidor.
     static readonly Regex FormatoUsuario = new Regex(@"^[a-z0-9_]{4,16}$");
 
+    // ---------- Vista (UI Toolkit) ----------
+    readonly Dictionary<Pantalla, ControladorPantalla> vistas = new Dictionary<Pantalla, ControladorPantalla>();
+    Label banner;
+    Pantalla? pantallaDibujada;
+    bool sucio = true;          // algo cambió: refrescar la pantalla visible en el próximo Update
+    float proximoRepintado;
+
     void Start()
     {
         ip = PlayerPrefs.GetString("ip", "127.0.0.1");
+        puerto = PlayerPrefs.GetString("puerto", "7777");
         // Se recuerda el último usuario para no reescribirlo en cada arranque
         usuario = PlayerPrefs.GetString("usuario", "");
         pestana = usuario == "" ? 1 : 0;
 
         Red.AlRecibir += m =>
         {
+            sucio = true;
             if (m.t == "salas") ultimaLista = m;
             // "sala" llega cada vez que algo cambia (alguien entra, sale, marca listo o edita
             // su perfil). Solo lleva a la pantalla de la sala desde el lobby, al crear o
@@ -76,7 +90,7 @@ public class MenuLobby : MonoBehaviour
             }
             if (m.t == "expulsado")
             {
-                pantalla = Pantalla.Conexion; listo = false;
+                pantalla = Pantalla.Login; listo = false;
                 aviso = "Fuiste expulsado por un administrador. Motivo: " + (m.motivo ?? "sin motivo");
                 tAviso = Time.time;
             }
@@ -90,20 +104,74 @@ public class MenuLobby : MonoBehaviour
                 erroresPrevios = m.estado.errores;
             }
         };
-        Red.AlError += e => { aviso = e; info = ""; guardando = false; tAviso = Time.time; };
-        Red.AlDesconectar += () => { pantalla = Pantalla.Conexion; aviso = "Se perdió la conexión con el servidor"; };
+        Red.AlError += e =>
+        {
+            // Sin conexión, el error es del intento de conectar: va al chip de estado del Login
+            if (!Red.Conectado) errorConexion = e;
+            aviso = e; info = ""; guardando = false; tAviso = Time.time; sucio = true;
+        };
+        Red.AlDesconectar += () =>
+        {
+            pantalla = Pantalla.Login;
+            aviso = errorConexion = "Se perdió la conexión con el servidor";
+            sucio = true;
+        };
+
+        CrearVista();
+    }
+
+    // Un UIDocument creado por código con el PanelSettings que genera ConfigurarUI
+    // (escala con la pantalla, referencia 1280×720). Así la escena no cambia: el menú
+    // sigue siendo solo este componente en el objeto "Red".
+    void CrearVista()
+    {
+        var panel = Resources.Load<PanelSettings>("UI/PanelUI");
+        if (panel == null)
+        {
+            Debug.LogError("[Quimica] Falta Resources/UI/PanelUI: ejecuta Quimica/4. Configurar UI");
+            return;
+        }
+        var doc = gameObject.AddComponent<UIDocument>();
+        doc.panelSettings = panel;
+
+        var raiz = new VisualElement { name = "raiz", pickingMode = PickingMode.Ignore };
+        raiz.AddToClassList("raiz");
+        raiz.styleSheets.Add(Resources.Load<StyleSheet>("UI/Estilos"));
+        doc.rootVisualElement.Add(raiz);
+
+        vistas[Pantalla.Login] = new PantallaLogin(this, Cargar(raiz, "Login"));
+        vistas[Pantalla.Menu] = new PantallaMenu(this, Cargar(raiz, "Menu"));
+
+        // El banner va al final para quedar encima de cualquier pantalla
+        var franja = new VisualElement { pickingMode = PickingMode.Ignore };
+        franja.AddToClassList("banner");
+        banner = new Label { pickingMode = PickingMode.Ignore };
+        franja.Add(banner);
+        raiz.Add(franja);
+
+        foreach (var v in vistas.Values) Ui.AplicarGaps(v.Raiz);
+    }
+
+    static VisualElement Cargar(VisualElement raiz, string uxml)
+    {
+        var arbol = Resources.Load<VisualTreeAsset>("UI/" + uxml);
+        var cont = arbol.Instantiate();
+        cont.AddToClassList("pantalla-cont");
+        cont.pickingMode = PickingMode.Ignore;
+        raiz.Add(cont);
+        Ui.Mostrar(cont, false);
+        return cont;
     }
 
     void AlRecibirPerfil(InfoPerfil p)
     {
         aviso = "";
-        if (pantalla == Pantalla.Perfil)
+        if (pantalla == Pantalla.Login)
         {
             if (!PruebaAutomatica.Activa) PlayerPrefs.SetString("usuario", p.usuario);
-            pantalla = Pantalla.Salas;
-            proximoRefresco = 0;
+            pantalla = Pantalla.Menu;
         }
-        else if (pantalla == Pantalla.EditarPerfil && guardando)
+        else if (pantalla == Pantalla.Perfil && guardando)
         {
             guardando = false;
             info = "Perfil guardado";
@@ -118,89 +186,54 @@ public class MenuLobby : MonoBehaviour
             proximoRefresco = Time.time + 2f;   // refresco automático de la lista
             Red.ListarSalas();
         }
+        ActualizarVista();
     }
 
+    void ActualizarVista()
+    {
+        if (vistas.Count == 0) return;
+        if (pantallaDibujada != pantalla)
+        {
+            foreach (var par in vistas) Ui.Mostrar(par.Value.Raiz, par.Key == pantalla);
+            if (vistas.TryGetValue(pantalla, out var nueva)) nueva.AlMostrar();
+            pantallaDibujada = pantalla;
+            sucio = true;
+        }
+        // Además de los cambios avisados, un repintado lento: la conexión puede caerse o
+        // un aviso vencer sin que llegue ningún mensaje.
+        if (sucio || Time.time > proximoRepintado)
+        {
+            sucio = false;
+            proximoRepintado = Time.time + 0.5f;
+            if (vistas.TryGetValue(pantalla, out var v)) v.Refrescar();
+        }
+        string global = AvisoGlobal;
+        banner.text = global == "" ? "" : "AVISO: " + global;
+        Ui.Mostrar(banner, global != "");
+    }
+
+    // ---------- Pantallas que todavía son IMGUI (pasan a UI Toolkit en UI-2 y UI-3) ----------
     void OnGUI()
     {
+        if (vistas.ContainsKey(pantalla)) return;
         var fuente = GestorPartida.FuenteBase();   // la misma de los textos 3D: tiene "_" y "₂"
         if (fuente != null) GUI.skin.font = fuente;
         GUI.skin.label.fontSize = GUI.skin.button.fontSize = GUI.skin.textField.fontSize = 18;
-        if (pantalla == Pantalla.Partida) { Hud(); BannerAvisoGlobal(); return; }
+        if (pantalla == Pantalla.Partida) { Hud(); return; }
 
         GUILayout.BeginArea(new Rect(Screen.width / 2f - 260, 40, 520, Screen.height - 80), GUI.skin.box);
-        GUILayout.Label("<b><size=26>Juego de Química — Demo Multijugador</size></b>", Rico());
-
-        // Los errores van arriba para que se vean sin bajar la vista
         if (!string.IsNullOrEmpty(aviso)) GUILayout.Label($"<color=#ff7070>{aviso}</color>", Rico());
         if (!string.IsNullOrEmpty(info)) GUILayout.Label($"<color=#7fff7f>{info}</color>", Rico());
         GUILayout.Space(10);
-
         switch (pantalla)
         {
-            case Pantalla.Conexion: Conexion(); break;
-            case Pantalla.Perfil: Perfil(); break;
             case Pantalla.Salas: Salas(); break;
             case Pantalla.Sala: Sala(); break;
-            case Pantalla.EditarPerfil: EditarPerfil(); break;
+            case Pantalla.Perfil: EditarPerfil(); break;
         }
         GUILayout.EndArea();
-        BannerAvisoGlobal();   // al final: IMGUI dibuja encima lo último
     }
 
-    void Conexion()
-    {
-        ip = Campo("IP del servidor", ip);
-        puerto = Campo("Puerto", puerto);
-        GUILayout.Space(10);
-        if (GUILayout.Button("Conectar", GUILayout.Height(45))) Conectar(ip, puerto);
-        GUILayout.Label("<size=14>Local: 127.0.0.1 · En otra PC de la red: la IP que muestra instalar_servidor.bat</size>", Rico());
-    }
-
-    // ---------- Ventana 1: iniciar sesión / crear perfil ----------
-    void Perfil()
-    {
-        int antes = pestana;
-        pestana = GUILayout.Toolbar(pestana, new[] { "Iniciar sesión", "Crear perfil" }, GUILayout.Height(36));
-        if (pestana != antes) aviso = "";
-        GUILayout.Space(10);
-
-        usuario = Campo("Usuario", usuario).ToLowerInvariant();
-        if (pestana == 0)
-        {
-            GUILayout.Space(10);
-            if (GUILayout.Button("Entrar", GUILayout.Height(45))) Entrar(usuario);
-        }
-        else
-        {
-            // "guion bajo" en palabras: la fuente del juego no dibuja el carácter "_"
-            GUILayout.Label("<size=14>De 4 a 16 caracteres: letras, números y guion bajo. No se puede cambiar después.</size>", Rico());
-            nombrePerfil = Campo("Nombre visible", nombrePerfil);
-            SelectorColor();
-            GUILayout.Space(10);
-            if (GUILayout.Button("Crear", GUILayout.Height(45))) CrearPerfil(usuario, nombrePerfil, colorPerfil);
-        }
-
-        GUILayout.Space(15);
-        if (GUILayout.Button("Desconectar")) Desconectar();
-    }
-
-    bool UsuarioValido()
-    {
-        if (FormatoUsuario.IsMatch(usuario.Trim())) return true;
-        aviso = "Usuario inválido: de 4 a 16 caracteres, solo letras, números y guion bajo";
-        return false;
-    }
-
-    bool NombreValido()
-    {
-        int n = nombrePerfil.Trim().Length;
-        if (n >= 1 && n <= 20) return true;
-        aviso = "El nombre visible debe tener de 1 a 20 caracteres";
-        return false;
-    }
-
-    // 8 cuadrados del color de la paleta; el elegido lleva un borde blanco y negro
-    // (las dos capas para que el borde también se vea alrededor del blanco).
     void SelectorColor()
     {
         GUILayout.BeginHorizontal();
@@ -224,144 +257,62 @@ public class MenuLobby : MonoBehaviour
 
     static Rect Encoger(Rect r, float d) => new Rect(r.x + d, r.y + d, r.width - 2 * d, r.height - 2 * d);
 
-    // ---------- Ventana 2: editar perfil + progreso ----------
-    public void AbrirEditarPerfil()
-    {
-        var p = Red.MiPerfil;
-        nombrePerfil = p.nombre;
-        colorPerfil = p.color;
-        aviso = info = "";
-        guardando = false;
-        pantalla = Pantalla.EditarPerfil;
-        Red.VerPerfil();   // el progreso pudo cambiar desde el login
-    }
-
     void EditarPerfil()
     {
         var p = Red.MiPerfil;
         if (p == null) return;
         GUILayout.Label("<b>Mi perfil</b>", Rico());
-        GUILayout.BeginHorizontal();
-        GUILayout.Label("Usuario", GUILayout.Width(170));
-        GUILayout.Label($"<b>{p.usuario}</b>  <size=14><color=#aaaaaa>(no se puede cambiar)</color></size>", Rico());
-        GUILayout.EndHorizontal();
+        GUILayout.Label($"Usuario: <b>{p.usuario}</b>", Rico());
         nombrePerfil = Campo("Nombre visible", nombrePerfil);
         SelectorColor();
-
-        GUILayout.Space(8);
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("Guardar", GUILayout.Height(40))) GuardarPerfil(nombrePerfil, colorPerfil);
         if (GUILayout.Button("Volver", GUILayout.Height(40))) Volver();
         GUILayout.EndHorizontal();
-
-        GUILayout.Space(15);
-        GUILayout.Label("<b>Progreso</b>", Rico());
-        // En la S2-3 un perfil en 0 parecía un error de guardado, pero era el de quien fue
-        // Wizard en todas las misiones: la regla se dice aquí para que no se confunda.
-        GUILayout.Label("<size=14><color=#aaaaaa>Suma cada Player que está en la sala al completar la misión. El Wizard guía, pero no suma.</color></size>", Rico());
         var pr = p.progreso;
         if (pr == null) return;
-        GUILayout.Label($"Misiones completadas: <b>{pr.completadas}</b>", Rico());
-        GUILayout.Label("Mejor tiempo en \"Sintetizar agua\": <b>" +
-                        (pr.completadas > 0 ? Segundos(pr.mejor_tiempo_s) : "—") + "</b>", Rico());
-        GUILayout.Label($"Errores cometidos (todas las partidas): <b>{pr.errores_totales}</b>", Rico());
-        GUILayout.Space(5);
-        GUILayout.Label("<b>Últimas misiones</b>", Rico());
-        if (pr.historial.Count == 0) GUILayout.Label("<color=#aaaaaa>Todavía no completaste ninguna.</color>", Rico());
-        foreach (var h in pr.historial)
-            GUILayout.Label($"<size=16>{Fecha(h.fecha)} · {Segundos(h.duracion_s)} · {h.errores} errores</size>", Rico());
+        GUILayout.Label($"Completadas: <b>{pr.completadas}</b> · Errores: <b>{pr.errores_totales}</b>", Rico());
     }
 
-    // El servidor manda la fecha en UTC (ISO 8601); se muestra en la hora de esta PC
-    static string Fecha(string iso) =>
-        DateTime.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal, out var f)
-            ? f.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
-            : iso;
-
-    static string Segundos(float s) => s.ToString("0.0", CultureInfo.InvariantCulture) + " s";
-
-    static string ConColor(string texto, string hex) => $"<color={hex}>{texto}</color>";
-
-    // ---------- Lobby ----------
     void Salas()
     {
-        var p = Red.MiPerfil;
-        GUILayout.BeginHorizontal();
-        if (p != null) GUILayout.Label($"Hola, <b>{ConColor(p.nombre, p.color)}</b> <size=14>({p.usuario})</size>", Rico());
-        if (GUILayout.Button("Mi perfil", GUILayout.Width(130))) AbrirEditarPerfil();
-        GUILayout.EndHorizontal();
-        GUILayout.Space(10);
-
-        GUILayout.Label("<b>Crear sala</b>", Rico());
+        if (GUILayout.Button("Volver al menú")) VolverAlMenu();
         nombreSala = Campo("Nombre", nombreSala);
         GUILayout.BeginHorizontal();
         GUILayout.Label($"Máx. jugadores: {maximo}", GUILayout.Width(200));
         maximo = Mathf.RoundToInt(GUILayout.HorizontalSlider(maximo, 2, 8));
         GUILayout.EndHorizontal();
         if (GUILayout.Button("Crear sala", GUILayout.Height(40))) CrearSala();
-
-        GUILayout.Space(15);
-        GUILayout.Label("<b>Unirse por código</b>", Rico());
         GUILayout.BeginHorizontal();
         codigo = GUILayout.TextField(codigo.ToUpper(), 4, GUILayout.Width(120));
         if (GUILayout.Button("Unirse")) Unirse(codigo);
         GUILayout.EndHorizontal();
-
-        GUILayout.Space(15);
-        GUILayout.Label("<b>Salas disponibles</b>", Rico());
         scroll = GUILayout.BeginScrollView(scroll, GUILayout.Height(220));
-        if (ultimaLista?.lista == null || ultimaLista.lista.Count == 0)
-            GUILayout.Label("No hay salas todavía. ¡Crea una!");
-        else
+        if (ultimaLista?.lista != null)
             foreach (var s in ultimaLista.lista)
             {
                 GUILayout.BeginHorizontal(GUI.skin.box);
-                GUILayout.Label($"[{s.id}] {s.nombre}  ({s.cantidad}/{s.maximo}) {(s.estado == "jugando" ? "· en juego" : "")}");
+                GUILayout.Label($"[{s.id}] {s.nombre}  ({s.cantidad}/{s.maximo})");
                 GUI.enabled = s.estado == "esperando" && s.cantidad < s.maximo;
                 if (GUILayout.Button("Entrar", GUILayout.Width(90))) Unirse(s.id);
                 GUI.enabled = true;
                 GUILayout.EndHorizontal();
             }
         GUILayout.EndScrollView();
-
-        if (GUILayout.Button("Desconectar")) Desconectar();
     }
 
     void Sala()
     {
         var s = Red.SalaActual;
         if (s == null) return;
-        bool soyHost = s.host == Red.MiId;
-
-        GUILayout.BeginHorizontal();
-        GUILayout.Label($"<b>{s.nombre}</b>   Código: <b><color=#7fd4ff>{s.id}</color></b>", Rico());
-        if (GUILayout.Button("Mi perfil", GUILayout.Width(130))) AbrirEditarPerfil();
-        GUILayout.EndHorizontal();
-        GUILayout.Label($"Jugadores {s.cantidad}/{s.maximo}");
-        // Texto y color en vez de emojis: la fuente por defecto de IMGUI no los dibuja
+        GUILayout.Label($"<b>{s.nombre}</b>   Código: <b>{s.id}</b>", Rico());
         foreach (var j in s.jugadores)
+            GUILayout.Label($"• {j.nombre} — {j.rol} {(j.listo ? "listo" : "")}", Rico());
+        if (s.host == Red.MiId)
         {
-            string etiqueta = j.rol == "wizard"
-                ? "<color=#c58cff>Wizard (anfitrión)</color>"
-                : "Player · " + (j.listo ? "<color=#7fff7f>listo</color>" : "<color=#aaaaaa>esperando</color>");
-            GUILayout.Label($"• <b>{ConColor(j.nombre, j.color)}</b>{(j.id == Red.MiId ? " (tú)" : "")} — {etiqueta}", Rico());
-        }
-        GUILayout.Label(Red.SoyWizard
-            ? "<size=14>Eres el <b>Wizard</b>: verás qué elemento es cada esfera y guiarás al equipo. No puedes agarrar ni sumas progreso.</size>"
-            : "<size=14>Eres <b>Player</b>: llevarás las esferas al reactor, pero solo verás \"?\". Escucha al Wizard.</size>", Rico());
-
-        GUILayout.Space(15);
-        if (soyHost)
-        {
-            // Con el Wizard solo nadie puede agarrar: la misión sería imposible
-            bool pocos = s.cantidad < 2;
-            GUI.enabled = !pocos;
+            GUI.enabled = s.cantidad >= 2;
             if (GUILayout.Button("Iniciar partida", GUILayout.Height(45))) Iniciar();
             GUI.enabled = true;
-            if (pocos)
-                GUILayout.Label("<color=#ffb060>Se necesitan al menos 2 jugadores: el Wizard no puede agarrar objetos.</color>", Rico());
-            else if (s.jugadores.Exists(j => j.id != s.host && !j.listo))
-                GUILayout.Label("<color=#aaaaaa>Esperando a que todos marquen \"Listo\".</color>", Rico());
         }
         else if (GUILayout.Button(listo ? "Ya no estoy listo" : "¡Listo!", GUILayout.Height(45))) CambiarListo();
         if (GUILayout.Button("Salir de la sala")) SalirDeSala();
@@ -369,133 +320,17 @@ public class MenuLobby : MonoBehaviour
 
     void Hud()
     {
-        var s = Red.SalaActual;
-        var mision = Red.MisionActual;
         var estado = Red.EstadoActual;
-        bool wizard = Red.SoyWizard;
-
-        GUILayout.BeginArea(new Rect(10, 10, 420, 320), GUI.skin.box);
-        GUILayout.Label($"Sala <b>{s?.id}</b> · {s?.cantidad} jugadores · Eres <b>{(wizard ? "<color=#c58cff>Wizard</color>" : "Player")}</b>", Rico());
-        GUILayout.Label(wizard
-            ? "<size=15>WASD: moverte · Clic en una esfera: señalarla · ESC: salir</size>"
-            : "<size=15>WASD: moverte · E: agarrar / soltar cerca · ESC: salir</size>", Rico());
-        if (estado != null)
-        {
-            string dentro = estado.reactor.Count == 0 ? "vacío" : string.Join(" + ", estado.reactor);
-            GUILayout.Label($"Reactor: <b>{dentro}</b>", Rico());
-            GUILayout.Label($"Errores: <b>{estado.errores}</b>", Rico());
-        }
-        if (wizard && mision != null)
-        {
-            GUILayout.Label($"Receta: <b><color=#7fd4ff>{mision.formula}</color></b>", Rico());
-            if (GUILayout.Button("Reiniciar misión", GUILayout.Height(32))) Red.Reiniciar();
-        }
-        GUILayout.EndArea();
-
-        // Mensaje central: la victoria queda fija; el resto se muestra 3 segundos
         if (estado != null && !string.IsNullOrEmpty(estado.mensaje) && (estado.completada || Time.time - tMensaje < 3f))
         {
-            string color = estado.completada ? "#7fff7f" : (mensajeEsError ? "#ff7070" : "#ffffff");
-            int tam = estado.completada ? 40 : 28;
             var centro = new GUIStyle(Rico()) { alignment = TextAnchor.MiddleCenter };
-            GUI.Label(new Rect(0, Screen.height * .2f, Screen.width, 120), $"<b><size={tam}><color={color}>{estado.mensaje}</color></size></b>", centro);
-            if (estado.completada)
-                GUI.Label(new Rect(0, Screen.height * .2f + 100, Screen.width, 40),
-                          wizard ? "<size=20><color=#c58cff>El Wizard no suma progreso</color></size>"
-                                 : "<size=20><color=#7fff7f>+1 misión en tu perfil (ESC y luego Mi perfil)</color></size>", centro);
+            GUI.Label(new Rect(0, Screen.height * .2f, Screen.width, 120), $"<b><size=28>{estado.mensaje}</size></b>", centro);
         }
-
-        // Rechazos del servidor (p. ej. "Otro jugador ya lleva ese objeto")
         if (!string.IsNullOrEmpty(aviso) && Time.time - tAviso < 3f)
         {
             var abajo = new GUIStyle(Rico()) { alignment = TextAnchor.MiddleCenter };
             GUI.Label(new Rect(0, Screen.height - 60, Screen.width, 40), $"<color=#ffb060>{aviso}</color>", abajo);
         }
-    }
-
-    void BannerAvisoGlobal()
-    {
-        if (AvisoGlobal == "") return;
-        var franja = new Rect(0, 0, Screen.width, 56);
-        var antes = GUI.color;
-        GUI.color = new Color(0.96f, 0.83f, 0.25f);   // el mismo amarillo de la paleta (#F5D33F)
-        GUI.DrawTexture(franja, Texture2D.whiteTexture);
-        GUI.color = antes;
-        var estilo = new GUIStyle(Rico()) { alignment = TextAnchor.MiddleCenter };
-        GUI.Label(franja, $"<b><size=22><color=#2a2200>AVISO: {avisoGlobal}</color></size></b>", estilo);
-    }
-
-    // ---------- Acciones (las llaman los botones y también PruebaAutomatica) ----------
-    // Están separadas del dibujo para que la prueba del build real recorra exactamente
-    // el mismo código que un clic, y no una copia que podría comportarse distinto.
-    public string PantallaActual => pantalla.ToString();
-    public string Aviso => aviso;
-    public string AvisoGlobal => Time.time - tAvisoGlobal < DuracionAvisoGlobal ? avisoGlobal : "";
-
-    public void Conectar(string ip, string puerto)
-    {
-        this.ip = ip;
-        this.puerto = puerto;
-        if (!PruebaAutomatica.Activa) PlayerPrefs.SetString("ip", ip);
-        aviso = "";
-        if (Red.Conectar(ip.Trim(), int.TryParse(puerto, out var p) ? p : 7777)) pantalla = Pantalla.Perfil;
-    }
-
-    public void Entrar(string usuario)
-    {
-        this.usuario = usuario.ToLowerInvariant();
-        if (UsuarioValido()) Red.Login(this.usuario.Trim());
-    }
-
-    public void CrearPerfil(string usuario, string nombre, string color)
-    {
-        this.usuario = usuario.ToLowerInvariant();
-        nombrePerfil = nombre;
-        colorPerfil = color;
-        if (UsuarioValido() && NombreValido()) Red.Registrar(this.usuario.Trim(), nombrePerfil.Trim(), colorPerfil);
-    }
-
-    public void Desconectar()
-    {
-        Red.Cerrar();
-        pantalla = Pantalla.Conexion;
-        aviso = "";
-    }
-
-    public void GuardarPerfil(string nombre, string color)
-    {
-        nombrePerfil = nombre;
-        colorPerfil = color;
-        if (!NombreValido()) return;
-        info = "";
-        guardando = true;
-        Red.EditarPerfil(nombrePerfil.Trim(), colorPerfil);
-    }
-
-    public void Volver()
-    {
-        aviso = info = "";
-        pantalla = Red.SalaActual != null ? Pantalla.Sala : Pantalla.Salas;
-        proximoRefresco = 0;
-    }
-
-    public void CrearSala() => Red.CrearSala(nombreSala, maximo);
-    public void Unirse(string codigo) => Red.Unirse(codigo);
-    public void Iniciar() => Red.IniciarPartida();
-
-    public void CambiarListo()
-    {
-        listo = !listo;
-        Red.MarcarListo(listo);
-    }
-
-    // ESC en la partida o "Salir de la sala" en la sala
-    public void SalirDeSala()
-    {
-        Red.SalirSala();
-        if (pantalla != Pantalla.Partida) return;
-        var gestor = FindFirstObjectByType<GestorPartida>();
-        if (gestor != null) gestor.Terminar();
     }
 
     string Campo(string etiqueta, string valor)
@@ -508,4 +343,166 @@ public class MenuLobby : MonoBehaviour
     }
 
     static GUIStyle Rico() => new GUIStyle(GUI.skin.label) { richText = true, wordWrap = true };
+
+    // ---------- Estado que leen las pantallas ----------
+    public string PantallaActual => pantalla.ToString();
+    public string Aviso => aviso;
+    public string Info => info;
+    public string ErrorConexion => errorConexion;
+    public string AvisoGlobal => Time.time - tAvisoGlobal < DuracionAvisoGlobal ? avisoGlobal : "";
+    public string Ip => ip;
+    public string Puerto => puerto;
+    public string Usuario => usuario;
+    public string NombrePerfil => nombrePerfil;
+    public int Pestana => pestana;
+    public string ColorPerfil { get => colorPerfil; set => colorPerfil = value; }
+
+    // ---------- Acciones (las llaman los botones y también PruebaAutomatica) ----------
+    public void CambiarPestana(int p)
+    {
+        if (p != pestana) aviso = "";
+        pestana = p;
+        sucio = true;
+    }
+
+    public void FijarServidor(string ip, string puerto)
+    {
+        this.ip = (ip ?? "").Trim();
+        this.puerto = (puerto ?? "").Trim();
+    }
+
+    // Conecta sin salir del Login: el chip de abajo pasa a "conectado" o muestra el error
+    public bool Conectar(string ip, string puerto)
+    {
+        FijarServidor(ip, puerto);
+        if (!PruebaAutomatica.Activa) { PlayerPrefs.SetString("ip", this.ip); PlayerPrefs.SetString("puerto", this.puerto); }
+        aviso = errorConexion = "";
+        sucio = true;
+        bool ok = Red.Conectar(this.ip, int.TryParse(this.puerto, out var p) ? p : 7777);
+        // Si falla, ClienteRed ya avisó por AlError (que dejó el texto en aviso); puede
+        // pasar con el socket todavía abierto (el servidor no respondió al ping), así que
+        // se marca aquí y no se depende de Conectado.
+        if (!ok) errorConexion = aviso;
+        return ok;
+    }
+
+    // El Login unió la pantalla de conexión con la de perfil: si todavía no hay
+    // conexión, Entrar / Crear cuenta conectan primero con la IP y el puerto escritos.
+    bool AsegurarConexion() => Red.Conectado || Conectar(ip, puerto);
+
+    public void Entrar(string usuario)
+    {
+        this.usuario = (usuario ?? "").ToLowerInvariant();
+        if (UsuarioValido() && AsegurarConexion()) Red.Login(this.usuario.Trim());
+        sucio = true;
+    }
+
+    public void CrearPerfil(string usuario, string nombre, string color)
+    {
+        this.usuario = (usuario ?? "").ToLowerInvariant();
+        nombrePerfil = nombre ?? "";
+        colorPerfil = color;
+        if (UsuarioValido() && NombreValido() && AsegurarConexion())
+            Red.Registrar(this.usuario.Trim(), nombrePerfil.Trim(), colorPerfil);
+        sucio = true;
+    }
+
+    bool UsuarioValido()
+    {
+        if (FormatoUsuario.IsMatch(usuario.Trim())) return true;
+        aviso = "Usuario inválido: de 4 a 16 caracteres, solo letras, números y _";
+        return false;
+    }
+
+    bool NombreValido()
+    {
+        int n = nombrePerfil.Trim().Length;
+        if (n >= 1 && n <= 20) return true;
+        aviso = "El nombre visible debe tener de 1 a 20 caracteres";
+        return false;
+    }
+
+    // "Cerrar sesión" en el menú y el botón de desconectar: vuelve al Login
+    public void Desconectar()
+    {
+        Red.Cerrar();
+        pantalla = Pantalla.Login;
+        aviso = errorConexion = "";
+        sucio = true;
+    }
+
+    public void AbrirSalas()
+    {
+        pantalla = Pantalla.Salas;
+        aviso = "";
+        proximoRefresco = 0;
+        sucio = true;
+    }
+
+    public void VolverAlMenu()
+    {
+        pantalla = Pantalla.Menu;
+        aviso = "";
+        sucio = true;
+    }
+
+    public void AbrirEditarPerfil()
+    {
+        var p = Red.MiPerfil;
+        if (p == null) return;
+        nombrePerfil = p.nombre;
+        colorPerfil = p.color;
+        aviso = info = "";
+        guardando = false;
+        pantalla = Pantalla.Perfil;
+        sucio = true;
+        Red.VerPerfil();   // el progreso pudo cambiar desde el login
+    }
+
+    public void GuardarPerfil(string nombre, string color)
+    {
+        nombrePerfil = nombre ?? "";
+        colorPerfil = color;
+        sucio = true;
+        if (!NombreValido()) return;
+        info = "";
+        guardando = true;
+        Red.EditarPerfil(nombrePerfil.Trim(), colorPerfil);
+    }
+
+    public void Volver()
+    {
+        aviso = info = "";
+        pantalla = Red.SalaActual != null ? Pantalla.Sala : Pantalla.Menu;
+        proximoRefresco = 0;
+        sucio = true;
+    }
+
+    public void CrearSala() => Red.CrearSala(nombreSala, maximo);
+    public void Unirse(string codigo) => Red.Unirse((codigo ?? "").Trim().ToUpperInvariant());
+    public void Iniciar() => Red.IniciarPartida();
+
+    public void CambiarListo()
+    {
+        listo = !listo;
+        Red.MarcarListo(listo);
+        sucio = true;
+    }
+
+    // ESC en la partida o "Salir de la sala" en la sala
+    public void SalirDeSala()
+    {
+        Red.SalirSala();
+        if (pantalla != Pantalla.Partida) return;
+        var gestor = FindFirstObjectByType<GestorPartida>();
+        if (gestor != null) gestor.Terminar();
+    }
+
+    // El servidor manda la fecha en UTC (ISO 8601); se muestra en la hora de esta PC
+    public static string Fecha(string iso) =>
+        DateTime.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal, out var f)
+            ? f.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
+            : iso;
+
+    public static string Segundos(float s) => s.ToString("0.0", CultureInfo.InvariantCulture) + " s";
 }
