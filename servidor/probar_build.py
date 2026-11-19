@@ -478,7 +478,7 @@ async def escenario_panel(s):
     try:
         sala = await w.crear_sala("codigo_panel")
         await w.esperar_sala_lista()
-        await w.env(t="iniciar")
+        await w.env(t="iniciar", modo="laberinto")  # como el cliente real desde S4-2: el modo agua tira el build
         await p.esperar("MARCA jugando")
         datos = {"usuario": "admin", "contrasena": clave_admin()}
         token = (await asyncio.to_thread(panel, "/login", datos))["token"]

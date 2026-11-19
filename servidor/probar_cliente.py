@@ -1,7 +1,8 @@
 """
 Prueba rápida del servidor sin Unity: simula 2 jugadores.
 Ana crea la sala (wizard) y Beto se une (player); recorren la misión del agua.
-Al final, con Caro, prueba qué pasa cuando sale un Player y cuando sale el Wizard.
+Al final, con Caro, prueba qué pasa cuando sale un Player y cuando sale el Wizard,
+y con Dani inicia una partida del laberinto (lo que hace el juego desde la S4-2).
 Uso:  python probar_cliente.py [ip] [puerto]
 """
 import asyncio
@@ -163,6 +164,31 @@ async def main():
     await ana.env(t="unirse", sala_id=codigo3); await ana.rec("sala")
     caro.w.close()
     assert (await ana.rec("fuera")).get("msg") == "El Wizard salió, la sala se cerró"
+
+    # Lo que manda el juego real desde la S4-2. Por qué está aquí: esta prueba es la de
+    # humo del paquete (Docker y .exe), y solo recorría el modo agua; la imagen de Docker
+    # salió sin servidor/niveles/ y nadie lo notó, porque el agua no lee ningún archivo.
+    print("16) Partida del laberinto (modo del cliente desde S4-2): llega el nivel")
+    dani = C("Dani")
+    await dani.conectar()
+    await dani.env(t="registro", usuario=f"dani_{sufijo}", nombre="Dani", color="#E04FD8")
+    dani.id = (await dani.rec("perfil"))["id"]
+    await ana.env(t="crear_sala", nombre_sala="Lab 4")
+    codigo4 = (await ana.rec("sala"))["sala"]["id"]
+    await dani.env(t="unirse", sala_id=codigo4); await dani.rec("sala"); await ana.rec("sala")
+    await dani.env(t="listo", valor=True); await dani.rec("sala"); await ana.rec("sala")
+    await ana.env(t="iniciar", modo="laberinto")
+    try:
+        i4 = await ana.rec("inicio"); await dani.rec("inicio")
+    except asyncio.TimeoutError:
+        sys.exit("ERROR: el servidor no inició el laberinto (¿falta servidor/niveles/ en el paquete? "
+                 "mira el log del servidor: nivel.cargar())")
+    nivel = i4["nivel"]
+    assert nivel["nivel"] and nivel["total_salas"] >= 1 and len(nivel["salas"]) == nivel["total_salas"], nivel
+    assert nivel["sala"] and "mision" not in i4, i4
+    print("17) Dani (Player) tira la palanca: el servidor responde con el estado de la sala")
+    await dani.env(t="palanca", puerta="x")
+    assert (await dani.rec("sala_estado"))
     print("\nTODO OK ✔")
 
 
