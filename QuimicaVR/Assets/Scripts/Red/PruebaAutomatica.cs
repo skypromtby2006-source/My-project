@@ -115,6 +115,7 @@ public class PruebaAutomatica : MonoBehaviour
             case "montacargas": Red.Montacargas(Arg(1)); break;
             case "colocar": Colocar(Arg(1), Arg(2), Arg(3)); break;
             case "capturas": yield return Capturas(); break;
+            case "medir_fps": yield return MedirFps(float.Parse(Arg(1), System.Globalization.CultureInfo.InvariantCulture)); break;
             case "empujar": yield return Empujar(Arg(1), Arg(2), Arg(3)); break;
             case "esperar_escena": yield return Esperar(() => gestor.HayEscena, "la escena del laberinto"); break;
             case "esperar_sala":
@@ -253,6 +254,51 @@ public class PruebaAutomatica : MonoBehaviour
         rt.Release();
         Destroy(rt); Destroy(tex);
         Log("REPORTE capturas " + JsonUtility.ToJson(lista));
+    }
+
+    // ---------- Rendimiento (criterio S4-4: ≥ 60 FPS) ----------
+    // Renderiza la cámara del jugador a 1920×1080 cada frame, sin tope de FPS ni vsync,
+    // y lee 1 píxel para esperar a que la GPU termine: así el número incluye el trabajo
+    // de la GPU (sin la lectura, la CPU podría ir por delante y dar FPS de más). Es una
+    // medida conservadora; la de verdad es el contador de F3 jugando.
+    [Serializable] class InfoFps { public float fps, ms_medio, ms_peor; public int cuadros; public string dispositivo, resolucion; }
+
+    IEnumerator MedirFps(float segundos)
+    {
+        var jl = gestor != null ? gestor.JugadorLocal : null;
+        if (jl == null || SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null) { Fallar("medir_fps necesita el laberinto y GPU"); yield break; }
+        var cam = jl.GetComponentInChildren<Camera>();
+        int tope = Application.targetFrameRate, vsync = QualitySettings.vSyncCount;
+        Application.targetFrameRate = -1;
+        QualitySettings.vSyncCount = 0;
+        var rt = new RenderTexture(1920, 1080, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+        var px = new Texture2D(1, 1, TextureFormat.RGB24, false);
+        var pedido = new RenderPipeline.StandardRequest { destination = rt };
+        yield return null;
+        int n = 0; float peor = 0, inicio = Time.realtimeSinceStartup, previo = inicio;
+        while (Time.realtimeSinceStartup - inicio < segundos)
+        {
+            RenderPipeline.SubmitRenderRequest(cam, pedido);
+            var activa = RenderTexture.active;
+            RenderTexture.active = rt;
+            px.ReadPixels(new Rect(0, 0, 1, 1), 0, 0);   // espera a la GPU
+            RenderTexture.active = activa;
+            yield return null;
+            float ahora = Time.realtimeSinceStartup;
+            peor = Mathf.Max(peor, ahora - previo);
+            previo = ahora;
+            n++;
+        }
+        float total = Time.realtimeSinceStartup - inicio;
+        Application.targetFrameRate = tope;
+        QualitySettings.vSyncCount = vsync;
+        rt.Release(); Destroy(rt); Destroy(px);
+        var info = new InfoFps
+        {
+            fps = n / total, ms_medio = total / n * 1000f, ms_peor = peor * 1000f, cuadros = n,
+            dispositivo = SystemInfo.graphicsDeviceName, resolucion = "1920x1080",
+        };
+        Log("REPORTE fps " + JsonUtility.ToJson(info));
     }
 
     // Cada sala es un cuarto de 3×3 celdas entre paredes cada 4 columnas (la grilla del
