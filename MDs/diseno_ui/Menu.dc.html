@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Menú principal</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+*{box-sizing:border-box;font-family:Manrope,system-ui,sans-serif}
+.btn{border:0;border-radius:12px;padding:0 24px;height:52px;font-weight:800;font-size:18px;color:#fff;background:#7c3aed;cursor:pointer}
+.btn.sec{background:#2a2050;color:#f3efff;border:1px solid #4a3a8a}
+.btn.sm{height:44px;font-size:16px;padding:0 18px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.card{background:#1a1433;border:1px solid #3a2d6b;border-radius:16px}
+.lbl{font-size:15px;color:#b8aedd;font-weight:600}
+.inp{height:52px;border-radius:12px;border:1px solid #4a3a8a;background:#0e0a1f;color:#f3efff;padding:0 16px;font-size:18px;width:100%}
+.chip{display:inline-block;border-radius:999px;padding:5px 12px;font-size:14px;font-weight:800;background:#2a2050;color:#d8ccff}
+.ok{background:#123b36;color:#5eead4}.warn{background:#3a2d12;color:#fbbf24}.host{background:#3b2a7a;color:#d8ccff}
+.row{display:flex;align-items:center;gap:14px}
+</style>
+</helmet>
+<div style="width:1280px;height:720px;background:#0e0a1f;color:#f3efff;padding:48px 64px;display:flex;flex-direction:column;gap:36px">
+<div class="row" style="justify-content:space-between"><div style="font-weight:800;font-size:22px;letter-spacing:.06em;color:#a78bfa">QUÍMICA VR</div><div class="row"><span class="chip ok">Progreso sincronizado · rev. 2</span><span class="chip">Jugador 1 · estudiante</span></div></div>
+<div><h1 style="margin:0 0 6px;font-size:44px">Menú principal</h1><div class="lbl">Elige cómo quieres jugar</div></div>
+<div class="row" style="align-items:stretch;gap:24px;flex:1">
+<div class="card" style="flex:1;padding:28px;display:flex;flex-direction:column;gap:14px;">
+<span class="chip " style="align-self:flex-start">Próxima fase</span>
+<h2 style="margin:0;font-size:32px">Modo historia</h2>
+<p style="margin:0;font-size:18px;line-height:1.5;color:#b8aedd;flex:1">Avanza resolviendo puzles de enlaces y reacciones.</p>
+<button class="btn sec" disabled>Jugar</button></div>
+<div class="card" style="flex:1;padding:28px;display:flex;flex-direction:column;gap:14px;border:2px solid #8b5cf6;">
+<span class="chip ok" style="align-self:flex-start">Disponible</span>
+<h2 style="margin:0;font-size:32px">Multijugador</h2>
+<p style="margin:0;font-size:18px;line-height:1.5;color:#b8aedd;flex:1">Coopera o compite en una sala con otros jugadores.</p>
+<button class="btn">Ver salas</button></div>
+<div class="card" style="flex:1;padding:28px;display:flex;flex-direction:column;gap:14px;">
+<span class="chip " style="align-self:flex-start">Próxima fase</span>
+<h2 style="margin:0;font-size:32px">Laboratorio</h2>
+<p style="margin:0;font-size:18px;line-height:1.5;color:#b8aedd;flex:1">Espacio libre para experimentar con reacciones.</p>
+<button class="btn sec" disabled>Entrar</button></div>
+</div>
+<div class="row"><button class="btn sec">Perfil</button><button class="btn sec">Ajustes</button><div style="flex:1"></div><button class="btn sec">Cerrar sesión</button></div></div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":720}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

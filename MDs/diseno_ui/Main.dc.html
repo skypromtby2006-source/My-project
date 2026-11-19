@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Entrar · Login</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+*{box-sizing:border-box;font-family:Manrope,system-ui,sans-serif}
+.btn{border:0;border-radius:12px;padding:0 24px;height:52px;font-weight:800;font-size:18px;color:#fff;background:#7c3aed;cursor:pointer}
+.btn.sec{background:#2a2050;color:#f3efff;border:1px solid #4a3a8a}
+.btn.sm{height:44px;font-size:16px;padding:0 18px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.card{background:#1a1433;border:1px solid #3a2d6b;border-radius:16px}
+.lbl{font-size:15px;color:#b8aedd;font-weight:600}
+.inp{height:52px;border-radius:12px;border:1px solid #4a3a8a;background:#0e0a1f;color:#f3efff;padding:0 16px;font-size:18px;width:100%}
+.chip{display:inline-block;border-radius:999px;padding:5px 12px;font-size:14px;font-weight:800;background:#2a2050;color:#d8ccff}
+.ok{background:#123b36;color:#5eead4}.warn{background:#3a2d12;color:#fbbf24}.host{background:#3b2a7a;color:#d8ccff}
+.row{display:flex;align-items:center;gap:14px}
+</style>
+</helmet>
+<div style="width:1280px;height:720px;background:#0e0a1f;color:#f3efff;display:flex">
+<div style="flex:1;padding:72px;display:flex;flex-direction:column;justify-content:space-between">
+<div style="font-weight:800;font-size:22px;letter-spacing:.06em;color:#a78bfa">QUÍMICA VR</div>
+<div><h1 style="margin:0 0 16px;font-size:60px;line-height:1.05">Reacciones que<br>puedes tocar.</h1>
+<p style="margin:0;font-size:20px;line-height:1.5;color:#b8aedd;max-width:460px">Inicia sesión para continuar tu progreso o crea una cuenta para jugar con tus compañeros.</p></div>
+<div class="lbl">Servidor oficial · conectado</div></div>
+<div style="width:560px;padding:56px 56px 56px 0;display:flex;align-items:center">
+<div class="card" style="width:100%;padding:32px;display:flex;flex-direction:column;gap:20px">
+<div class="row"><button class="btn sm" style="flex:1">Entrar</button><button class="btn sm sec" style="flex:1">Crear cuenta</button></div>
+<div><label class="lbl" for="u">Usuario</label><input id="u" class="inp" value="jugador1"></div>
+<div><label class="lbl" for="p">Contraseña</label><input id="p" class="inp" type="password" value="prueba1234"></div>
+<div><label class="lbl" for="s">Servidor</label><select id="s" class="inp"><option>Oficial</option><option>Local (ingresar IP del host)</option></select></div>
+<button class="btn" style="width:100%">Entrar</button>
+</div></div></div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":720}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
