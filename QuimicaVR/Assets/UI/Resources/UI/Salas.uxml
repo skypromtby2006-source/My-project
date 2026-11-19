@@ -1,0 +1,57 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <!-- Diseño: MDs/diseno_ui/Salas.dc.html. Código de 4 caracteres (no 5); crear sala =
+         nombre + máximo de jugadores; modo fijo en Cooperativo (PvP "próximamente");
+         sin contraseña de sala. La lista se refresca sola cada 2 s (SPRINT_UI §3). -->
+    <Style src="Estilos.uss" />
+    <ui:VisualElement name="salas" class="pantalla g28">
+        <ui:VisualElement class="row entre">
+            <ui:VisualElement class="row g14">
+                <ui:Button name="volver" text="Volver" class="btn sec sm" />
+                <ui:Label text="Multijugador" class="h1-sm" />
+            </ui:VisualElement>
+            <ui:VisualElement name="chip-perfil" class="chip-perfil" />
+        </ui:VisualElement>
+
+        <ui:Label name="aviso" class="chip warn lg" />
+
+        <ui:VisualElement class="row estirar g28 grow">
+            <ui:VisualElement class="card grow">
+                <ui:VisualElement class="row entre" style="margin-bottom: 8px;">
+                    <ui:Label text="Salas abiertas" class="h2" />
+                    <ui:Button name="actualizar" text="Actualizar" class="btn sec sm" />
+                </ui:VisualElement>
+                <ui:ScrollView name="lista" class="lista grow" />
+                <ui:Label name="vacia" text="No hay salas abiertas. Crea una o espera a que alguien abra la suya." class="parrafo vacia" />
+                <ui:VisualElement class="row g14" style="margin-top: 12px;">
+                    <ui:TextField name="codigo" max-length="4" class="inp grow" />
+                    <ui:Button name="unirse-codigo" text="Unirse con código" class="btn" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="card col-crear g16">
+                <ui:Label text="Crear sala" class="h2" />
+                <ui:VisualElement>
+                    <ui:Label text="Nombre" class="lbl" />
+                    <ui:TextField name="nombre-sala" max-length="30" class="inp" />
+                </ui:VisualElement>
+                <ui:VisualElement>
+                    <ui:Label text="Modo" class="lbl" />
+                    <ui:VisualElement class="row g14">
+                        <ui:Button text="Cooperativo" class="btn sm grow" />
+                        <ui:Button text="PvP · próximamente" class="btn sm sec grow" enabled="false" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement>
+                    <ui:Label text="Máximo de jugadores" class="lbl" />
+                    <ui:VisualElement class="row g14">
+                        <ui:Button name="menos" text="−" class="btn sec sm paso" />
+                        <ui:Label name="maximo" text="4" class="inp-fijo valor-paso grow" />
+                        <ui:Button name="mas" text="+" class="btn sec sm paso" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="grow" />
+                <ui:Button name="crear" text="Crear sala" class="btn" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

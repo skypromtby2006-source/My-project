@@ -110,6 +110,13 @@ public static class Ui
         }, TrickleDown.TrickleDown);
     }
 
+    // Texto gris dentro del campo vacío, como el placeholder del HTML del diseño
+    public static void Placeholder(TextField campo, string texto)
+    {
+        campo.textEdition.placeholder = texto;
+        campo.textEdition.hidePlaceholderOnFocus = true;
+    }
+
     // Muestra un chip solo si tiene texto
     public static void Chip(Label chip, string texto)
     {

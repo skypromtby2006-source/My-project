@@ -218,3 +218,47 @@
     white-space: normal;
     -unity-text-align: middle-center;
 }
+
+/* ---------- Textos y datos extra (UI-2) ---------- */
+.h2-sm { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); font-size: 24px; margin: 0 0 4px 0; padding: 0; }
+.dato-lg { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); font-size: 30px; margin: 0; padding: 0; }
+.vacia { margin-top: 12px; }
+.raiz .lbl.sin-margen { margin: 0; }
+
+/* ---------- Salas ---------- */
+.col-crear { width: 420px; }
+.lista { flex-grow: 1; flex-shrink: 1; }
+/* La barra del ScrollView del tema por defecto es gris claro: se lleva a los tokens */
+.raiz .unity-scroller--vertical { width: 8px; border-width: 0; background-color: rgba(0, 0, 0, 0); }
+.raiz .unity-scroller--vertical .unity-base-slider__tracker { background-color: rgba(0, 0, 0, 0); border-width: 0; }
+.raiz .unity-scroller--vertical .unity-base-slider__dragger { background-color: var(--secundario-borde); border-width: 0; border-radius: 4px; width: 6px; left: 1px; }
+.raiz .unity-scroller--vertical .unity-repeat-button { display: none; }
+.nombre-fila { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); font-size: 19px; flex-grow: 1; flex-shrink: 1; }
+.cupo { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); font-size: 18px; width: 56px; -unity-text-align: middle-center; }
+.raiz .fila .chip { align-self: center; }
+.raiz .btn.paso { width: 52px; padding: 0; font-size: 22px; }
+.valor-paso { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); -unity-text-align: middle-center; color: var(--texto); }
+
+/* ---------- Lobby ---------- */
+.codigo-sala {
+    -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf");
+    font-size: 36px;
+    letter-spacing: 7px;
+    background-color: var(--tarjeta);
+    border-width: 1px;
+    border-color: var(--tarjeta-borde);
+    border-radius: 12px;
+    padding: 6px 20px;
+}
+.card-lado { padding: 24px; }
+.nombre-jugador { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); font-size: 20px; flex-grow: 1; flex-shrink: 1; }
+.raiz .fila-jugador .chip { align-self: center; }
+
+/* ---------- Mi perfil ---------- */
+.col-perfil { width: 460px; }
+.fila-historial { flex-direction: row; align-items: center; padding: 10px 0; border-top-width: 1px; border-color: var(--separador); }
+.fila-historial > Label { font-size: 17px; color: var(--texto); }
+.fila-historial > .fecha { flex-grow: 1; color: var(--texto-2); }
+.fila-historial > .col-dato { width: 130px; -unity-text-align: middle-right; }
+.raiz .inp .unity-base-text-field__input--placeholder .unity-text-element,
+.raiz .inp > .unity-base-text-field__input--placeholder { color: #6f64a0; }

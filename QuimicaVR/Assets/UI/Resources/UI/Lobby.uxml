@@ -1,0 +1,44 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <!-- Diseño: MDs/diseno_ui/Lobby.dc.html. "Equipo A / B" pasa a "Lado Wizard / Lado
+         Player" (el laberinto está separado por paredes). Sin "Cambiar de equipo" ni
+         "Expulsar" (backlog). Iniciar solo con 2 o más jugadores y todos listos; si no,
+         el chip de aviso dice qué falta (SPRINT_UI §3). -->
+    <Style src="Estilos.uss" />
+    <ui:VisualElement name="lobby" class="pantalla g28">
+        <ui:VisualElement class="row entre">
+            <ui:VisualElement>
+                <ui:Label text="Sala · Cooperativo" class="lbl" />
+                <ui:Label name="nombre" class="h1-sm" />
+            </ui:VisualElement>
+            <ui:VisualElement class="row g14">
+                <ui:Label text="Código" class="lbl" style="margin: 0;" />
+                <ui:Label name="codigo" class="codigo-sala" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement class="row estirar g28 grow">
+            <ui:VisualElement class="card card-lado grow">
+                <ui:Label text="Lado Wizard" class="h2-sm" />
+                <ui:Label text="Ve los datos y guía al equipo" class="lbl" />
+                <ui:VisualElement name="lado-wizard" />
+            </ui:VisualElement>
+            <ui:VisualElement class="card card-lado grow">
+                <ui:Label text="Lado Player" class="h2-sm" />
+                <ui:Label text="Recorre el laberinto y mueve los objetos" class="lbl" />
+                <ui:ScrollView name="lado-player" class="grow" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement class="row g14">
+            <ui:Label name="estado" class="chip warn lg" />
+            <ui:Label name="aviso" class="chip warn lg" />
+        </ui:VisualElement>
+
+        <ui:VisualElement class="row g14">
+            <ui:Button name="salir" text="Salir de la sala" class="btn sec" />
+            <ui:VisualElement class="grow" />
+            <ui:Button name="listo" text="Estoy listo" class="btn sec" />
+            <ui:Button name="iniciar" text="Iniciar partida" class="btn" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

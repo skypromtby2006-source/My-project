@@ -16,12 +16,11 @@ public class MenuLobby : MonoBehaviour
     Pantalla pantalla = Pantalla.Login;
 
     string ip = "127.0.0.1", puerto = "7777";
-    string nombreSala = "Laboratorio 1", codigo = "", aviso = "", info = "";
+    string nombreSala = "", aviso = "", info = "";
     string errorConexion = "";   // el último fallo al conectar o la caída: va en el chip del Login
     int maximo = 4;
     bool listo;
     float proximoRefresco;
-    Vector2 scroll;
     Mensaje ultimaLista;
 
     // Perfil: pestaña 0 = entrar, 1 = crear cuenta. Los mismos campos sirven para editar.
@@ -141,6 +140,9 @@ public class MenuLobby : MonoBehaviour
 
         vistas[Pantalla.Login] = new PantallaLogin(this, Cargar(raiz, "Login"));
         vistas[Pantalla.Menu] = new PantallaMenu(this, Cargar(raiz, "Menu"));
+        vistas[Pantalla.Salas] = new PantallaSalas(this, Cargar(raiz, "Salas"));
+        vistas[Pantalla.Sala] = new PantallaLobby(this, Cargar(raiz, "Lobby"));
+        vistas[Pantalla.Perfil] = new PantallaPerfil(this, Cargar(raiz, "Perfil"));
 
         // El banner va al final para quedar encima de cualquier pantalla
         var franja = new VisualElement { pickingMode = PickingMode.Ignore };
@@ -212,110 +214,14 @@ public class MenuLobby : MonoBehaviour
         Ui.Mostrar(banner, global != "");
     }
 
-    // ---------- Pantallas que todavía son IMGUI (pasan a UI Toolkit en UI-2 y UI-3) ----------
+    // ---------- HUD en IMGUI: pasa a UI Toolkit en la UI-3 ----------
     void OnGUI()
     {
-        if (vistas.ContainsKey(pantalla)) return;
+        if (pantalla != Pantalla.Partida) return;
         var fuente = GestorPartida.FuenteBase();   // la misma de los textos 3D: tiene "_" y "₂"
         if (fuente != null) GUI.skin.font = fuente;
-        GUI.skin.label.fontSize = GUI.skin.button.fontSize = GUI.skin.textField.fontSize = 18;
-        if (pantalla == Pantalla.Partida) { Hud(); return; }
-
-        GUILayout.BeginArea(new Rect(Screen.width / 2f - 260, 40, 520, Screen.height - 80), GUI.skin.box);
-        if (!string.IsNullOrEmpty(aviso)) GUILayout.Label($"<color=#ff7070>{aviso}</color>", Rico());
-        if (!string.IsNullOrEmpty(info)) GUILayout.Label($"<color=#7fff7f>{info}</color>", Rico());
-        GUILayout.Space(10);
-        switch (pantalla)
-        {
-            case Pantalla.Salas: Salas(); break;
-            case Pantalla.Sala: Sala(); break;
-            case Pantalla.Perfil: EditarPerfil(); break;
-        }
-        GUILayout.EndArea();
-    }
-
-    void SelectorColor()
-    {
-        GUILayout.BeginHorizontal();
-        GUILayout.Label("Color", GUILayout.Width(170));
-        foreach (var hex in ClienteRed.Paleta)
-        {
-            var r = GUILayoutUtility.GetRect(34, 34, GUILayout.Width(34), GUILayout.Height(34));
-            ColorUtility.TryParseHtmlString(hex, out var c);
-            if (hex == colorPerfil)
-            {
-                GUI.DrawTexture(r, Texture2D.whiteTexture);
-                GUI.DrawTexture(Encoger(r, 3), Texture2D.whiteTexture, ScaleMode.StretchToFill, false, 0, Color.black, 0, 0);
-                GUI.DrawTexture(Encoger(r, 6), Texture2D.whiteTexture, ScaleMode.StretchToFill, false, 0, c, 0, 0);
-            }
-            else GUI.DrawTexture(Encoger(r, 4), Texture2D.whiteTexture, ScaleMode.StretchToFill, false, 0, c, 0, 0);
-            if (GUI.Button(r, GUIContent.none, GUIStyle.none)) colorPerfil = hex;
-        }
-        GUILayout.FlexibleSpace();
-        GUILayout.EndHorizontal();
-    }
-
-    static Rect Encoger(Rect r, float d) => new Rect(r.x + d, r.y + d, r.width - 2 * d, r.height - 2 * d);
-
-    void EditarPerfil()
-    {
-        var p = Red.MiPerfil;
-        if (p == null) return;
-        GUILayout.Label("<b>Mi perfil</b>", Rico());
-        GUILayout.Label($"Usuario: <b>{p.usuario}</b>", Rico());
-        nombrePerfil = Campo("Nombre visible", nombrePerfil);
-        SelectorColor();
-        GUILayout.BeginHorizontal();
-        if (GUILayout.Button("Guardar", GUILayout.Height(40))) GuardarPerfil(nombrePerfil, colorPerfil);
-        if (GUILayout.Button("Volver", GUILayout.Height(40))) Volver();
-        GUILayout.EndHorizontal();
-        var pr = p.progreso;
-        if (pr == null) return;
-        GUILayout.Label($"Completadas: <b>{pr.completadas}</b> · Errores: <b>{pr.errores_totales}</b>", Rico());
-    }
-
-    void Salas()
-    {
-        if (GUILayout.Button("Volver al menú")) VolverAlMenu();
-        nombreSala = Campo("Nombre", nombreSala);
-        GUILayout.BeginHorizontal();
-        GUILayout.Label($"Máx. jugadores: {maximo}", GUILayout.Width(200));
-        maximo = Mathf.RoundToInt(GUILayout.HorizontalSlider(maximo, 2, 8));
-        GUILayout.EndHorizontal();
-        if (GUILayout.Button("Crear sala", GUILayout.Height(40))) CrearSala();
-        GUILayout.BeginHorizontal();
-        codigo = GUILayout.TextField(codigo.ToUpper(), 4, GUILayout.Width(120));
-        if (GUILayout.Button("Unirse")) Unirse(codigo);
-        GUILayout.EndHorizontal();
-        scroll = GUILayout.BeginScrollView(scroll, GUILayout.Height(220));
-        if (ultimaLista?.lista != null)
-            foreach (var s in ultimaLista.lista)
-            {
-                GUILayout.BeginHorizontal(GUI.skin.box);
-                GUILayout.Label($"[{s.id}] {s.nombre}  ({s.cantidad}/{s.maximo})");
-                GUI.enabled = s.estado == "esperando" && s.cantidad < s.maximo;
-                if (GUILayout.Button("Entrar", GUILayout.Width(90))) Unirse(s.id);
-                GUI.enabled = true;
-                GUILayout.EndHorizontal();
-            }
-        GUILayout.EndScrollView();
-    }
-
-    void Sala()
-    {
-        var s = Red.SalaActual;
-        if (s == null) return;
-        GUILayout.Label($"<b>{s.nombre}</b>   Código: <b>{s.id}</b>", Rico());
-        foreach (var j in s.jugadores)
-            GUILayout.Label($"• {j.nombre} — {j.rol} {(j.listo ? "listo" : "")}", Rico());
-        if (s.host == Red.MiId)
-        {
-            GUI.enabled = s.cantidad >= 2;
-            if (GUILayout.Button("Iniciar partida", GUILayout.Height(45))) Iniciar();
-            GUI.enabled = true;
-        }
-        else if (GUILayout.Button(listo ? "Ya no estoy listo" : "¡Listo!", GUILayout.Height(45))) CambiarListo();
-        if (GUILayout.Button("Salir de la sala")) SalirDeSala();
+        GUI.skin.label.fontSize = 18;
+        Hud();
     }
 
     void Hud()
@@ -333,15 +239,6 @@ public class MenuLobby : MonoBehaviour
         }
     }
 
-    string Campo(string etiqueta, string valor)
-    {
-        GUILayout.BeginHorizontal();
-        GUILayout.Label(etiqueta, GUILayout.Width(170));
-        valor = GUILayout.TextField(valor);
-        GUILayout.EndHorizontal();
-        return valor;
-    }
-
     static GUIStyle Rico() => new GUIStyle(GUI.skin.label) { richText = true, wordWrap = true };
 
     // ---------- Estado que leen las pantallas ----------
@@ -356,6 +253,9 @@ public class MenuLobby : MonoBehaviour
     public string NombrePerfil => nombrePerfil;
     public int Pestana => pestana;
     public string ColorPerfil { get => colorPerfil; set => colorPerfil = value; }
+    public string NombreSala { get => nombreSala; set => nombreSala = value ?? ""; }
+    public int Maximo { get => maximo; set => maximo = Mathf.Clamp(value, 2, 8); }   // mismo rango que el servidor
+    public List<InfoSala> Salas => ultimaLista?.lista ?? new List<InfoSala>();
 
     // ---------- Acciones (las llaman los botones y también PruebaAutomatica) ----------
     public void CambiarPestana(int p)
@@ -433,6 +333,8 @@ public class MenuLobby : MonoBehaviour
 
     public void AbrirSalas()
     {
+        // Nombre sugerido como en el diseño ("Sala de Jugador 1"); se puede cambiar
+        if (nombreSala == "" && Red.MiPerfil != null) nombreSala = "Sala de " + Red.MiPerfil.nombre;
         pantalla = Pantalla.Salas;
         aviso = "";
         proximoRefresco = 0;
@@ -478,7 +380,18 @@ public class MenuLobby : MonoBehaviour
         sucio = true;
     }
 
-    public void CrearSala() => Red.CrearSala(nombreSala, maximo);
+    public void CrearSala()
+    {
+        if (nombreSala.Trim() == "") nombreSala = "Sala de " + (Red.MiPerfil?.nombre ?? "laboratorio");
+        Red.CrearSala(nombreSala.Trim(), maximo);
+    }
+
+    // Botón "Actualizar": pide la lista ya y reinicia el refresco automático de 2 s
+    public void ActualizarSalas()
+    {
+        proximoRefresco = Time.time + 2f;
+        Red.ListarSalas();
+    }
     public void Unirse(string codigo) => Red.Unirse((codigo ?? "").Trim().ToUpperInvariant());
     public void Iniciar() => Red.IniciarPartida();
 
