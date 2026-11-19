@@ -68,14 +68,15 @@ public class PruebaAutomatica : MonoBehaviour
             case "reconectar":
                 // Al arrancar Docker, el proxy acepta la conexión antes de que el servidor
                 // escuche y la corta enseguida: se reintenta como lo haría una persona.
+                // Desde SPRINT_UI la conexión y el login son la misma pantalla: no hay un
+                // cambio de pantalla que esperar, se espera a que la conexión quede arriba.
                 float hasta = Time.time + EsperaMaxima;
-                while (menu.PantallaActual == "Conexion" && Time.time < hasta)
-                {
-                    menu.Conectar(ip, puerto);
+                while (!menu.Conectar(ip, puerto) && Time.time < hasta)
                     yield return new WaitForSeconds(1.5f);
-                }
-                yield return Esperar(() => menu.PantallaActual == "Perfil", "pantalla Perfil al reconectar");
+                yield return Esperar(() => Red.Conectado, "conexión al reconectar");
                 break;
+            case "esperar_conectado": yield return Esperar(() => Red.Conectado, "conexión con el servidor"); break;
+            case "abrir_salas": menu.AbrirSalas(); break;   // botón "Ver salas" del Menú principal
             case "registro": menu.CrearPerfil(Arg(1), Arg(2), Arg(3)); break;
             case "login": menu.Entrar(Arg(1)); break;
             case "desconectar": menu.Desconectar(); break;

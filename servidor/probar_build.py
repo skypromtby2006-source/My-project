@@ -244,36 +244,40 @@ class Bot:
         self.w.close()
 
 
+# SPRINT_UI: tras el login el juego va al Menú principal; las salas se abren con su
+# botón "Ver salas", como lo haría una persona.
+A_SALAS = ("esperar_pantalla|Menu", "abrir_salas", "esperar_pantalla|Salas")
+
 async def escenario_sesion(s):
     """B4: sesión única con ventanas reales, y que el usuario se libere al cerrar."""
     u = f"u_{s}"
     a = Build("sesion_a", ["conectar", "registro|abc|Corto|#6A5AE0", "esperar_aviso|de 4 a 16",  # B7
-                           f"registro|{u}|U{s}|#6A5AE0", "esperar_pantalla|Salas", "marca|logueado",
+                           f"registro|{u}|U{s}|#6A5AE0", "esperar_pantalla|Menu", "marca|logueado",
                            "esperar_senal|cerrar_a", "fin"])
     await a.esperar("MARCA logueado")
     b = Build("sesion_b", ["conectar", f"login|{u}", "esperar|2", "reporte|rechazo",
-                           "esperar_senal|a_cerrado", f"login|{u}", "esperar_pantalla|Salas", "reporte|entro",
+                           "esperar_senal|a_cerrado", f"login|{u}", "esperar_pantalla|Menu", "reporte|entro",
                            "desconectar", "marca|desconectado", "esperar_senal|c_listo", "fin"])
     r = await b.esperar("REPORTE rechazo")
-    comprobar(r["pantalla"] == "Perfil" and "sesión abierta" in (r["aviso"] or ""),
+    comprobar(r["pantalla"] == "Login" and "sesión abierta" in (r["aviso"] or ""),
               "una segunda ventana con el mismo usuario se rechaza", r)
     print("Se cierra la primera ventana: el usuario se libera")
     senal("cerrar_a")
     comprobar(await a.terminar() == 0, "la primera ventana se cerró")
     senal("a_cerrado")
     r = await b.esperar("REPORTE entro")
-    comprobar(r["pantalla"] == "Salas" and r["usuario"] == u, "la segunda ventana entra tras cerrar la primera", r)
+    comprobar(r["pantalla"] == "Menu" and r["usuario"] == u, "la segunda ventana entra tras cerrar la primera", r)
     await b.esperar("MARCA desconectado")
     print("Botón Desconectar y una tercera ventana entra; luego se mata a la fuerza")
-    c = Build("sesion_c", ["conectar", f"login|{u}", "esperar_pantalla|Salas", "reporte|entro", "esperar|60"])
+    c = Build("sesion_c", ["conectar", f"login|{u}", "esperar_pantalla|Menu", "reporte|entro", "esperar|60"])
     r = await c.esperar("REPORTE entro")
-    comprobar(r["pantalla"] == "Salas", "tras Desconectar, otra ventana entra con ese usuario", r)
+    comprobar(r["pantalla"] == "Menu", "tras Desconectar, otra ventana entra con ese usuario", r)
     senal("c_listo")
     c.proc.kill()  # como si el juego se colgara y se cerrara a la fuerza
     await c.terminar()
-    d = Build("sesion_d", ["conectar", f"login|{u}", "esperar_pantalla|Salas", "reporte|entro", "fin"])
+    d = Build("sesion_d", ["conectar", f"login|{u}", "esperar_pantalla|Menu", "reporte|entro", "fin"])
     r = await d.esperar("REPORTE entro")
-    comprobar(r["pantalla"] == "Salas", "tras matar el proceso, el usuario se libera", r)
+    comprobar(r["pantalla"] == "Menu", "tras matar el proceso, el usuario se libera", r)
     await d.esperar("FIN")
     await b.esperar("FIN")
 
@@ -295,8 +299,8 @@ async def reiniciar_servidor():
 async def escenario_reinicio(s):
     """B4: conectar y entrar apenas termina servidor_iniciar.sh, como lo haría una persona."""
     u = f"r_{s}"
-    p = Build("reinicio", ["conectar", f"registro|{u}|R{s}|#FFFFFF", "esperar_pantalla|Salas", "marca|reiniciar",
-                           "esperar_pantalla|Conexion", "esperar_senal|iniciar_termino",
+    p = Build("reinicio", ["conectar", f"registro|{u}|R{s}|#FFFFFF", "esperar_pantalla|Menu", "marca|reiniciar",
+                           "esperar_pantalla|Login", "esperar_senal|iniciar_termino",
                            "conectar", "esperar|0.5", f"login|{u}", "esperar|3", "reporte|tras_login", "fin"])
     await p.esperar("MARCA reiniciar")
     for script in ("servidor_detener.sh", "servidor_iniciar.sh"):  # sin esperar el log del servidor
@@ -304,7 +308,7 @@ async def escenario_reinicio(s):
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     senal("iniciar_termino")
     r = await p.esperar("REPORTE tras_login", timeout=90)
-    comprobar(r["pantalla"] == "Salas" and r["usuario"] == u,
+    comprobar(r["pantalla"] == "Menu" and r["usuario"] == u,
               "B4: se puede entrar apenas termina servidor_iniciar.sh", r)
     await p.esperar("FIN")
     await reiniciar_servidor()  # deja el servidor escuchando para el siguiente escenario
@@ -338,7 +342,7 @@ async def escenario_laberinto(s):
     try:
         await srv.arrancar()
         build = Build("laberinto", [
-            "conectar", f"registro|{w}|WLab{s}|#3FA9F5", "esperar_pantalla|Salas",
+            "conectar", f"registro|{w}|WLab{s}|#3FA9F5", *A_SALAS,
             *partida("p1"), "reporte|p1_inicio",
             ESTE_DE_D1, EMPUJE_OESTE, "esperar|0.2", "reporte|dc_cerrada",
             f"dial|dial_h2|{h2}", "marca|s1_wiz_listo", "esperar_senal|s1_baja", "palanca|D1",
@@ -347,9 +351,9 @@ async def escenario_laberinto(s):
             "esperar_senal|player_fuera", "esperar|1", "reporte|tras_player",
             "salir", "esperar_pantalla|Salas", "esperar|0.3", "reporte|lobby1",
             *partida("p2"), "reporte|p2_inicio", "salir", "esperar_pantalla|Salas",
-            "marca|reiniciar", "esperar_pantalla|Conexion", "esperar_senal|servidor_ok",
-            "conectar", "esperar_pantalla|Perfil", f"registro|{w}b|WLab2{s}|#3FA9F5",
-            "esperar_pantalla|Salas", "reporte|reconectado", "fin"])
+            "marca|reiniciar", "esperar_pantalla|Login", "esperar_senal|servidor_ok",
+            "conectar", "esperar_conectado", f"registro|{w}b|WLab2{s}|#3FA9F5",
+            "esperar_pantalla|Menu", "reporte|reconectado", "fin"])
 
         # ---- Partida 1 ----
         await build.esperar("MARCA p1")
@@ -400,7 +404,7 @@ async def escenario_laberinto(s):
         await srv.reiniciar()
         senal("servidor_ok")
         r = await build.esperar("REPORTE reconectado", timeout=90)
-        comprobar(r["pantalla"] == "Salas", "B4: el Wizard reconecta tras reiniciar el servidor", r)
+        comprobar(r["pantalla"] == "Menu", "B4: el Wizard reconecta tras reiniciar el servidor", r)
         await build.esperar("FIN")
     finally:
         srv.detener()
@@ -417,7 +421,7 @@ async def escenario_laberinto_player(s):
     try:
         await srv.arrancar()
         build = Build("laberinto_p", [
-            "conectar", f"registro|pl_{s}|PLab{s}|#4FE07A", "esperar_pantalla|Salas",
+            "conectar", f"registro|pl_{s}|PLab{s}|#4FE07A", *A_SALAS,
             "unirse_codigo|codlab", "esperar_pantalla|Sala", "listo", "esperar_pantalla|Partida",
             "esperar_escena", "esperar|0.5", "reporte|inicio",
             "esperar_senal|wiz_fuera", "esperar|1.5", "reporte|tras_wiz", "fin"])
@@ -467,7 +471,7 @@ async def escenario_panel(s):
     """S3-4: el juego real reacciona a las acciones del panel: aviso global, cierre de sala,
     expulsión y cuenta bloqueada, mostrando siempre el texto que mandó el admin."""
     u = f"pp_{s}"  # prefijos propios: "progreso" ya usa p_ y w_ en la misma corrida
-    p = Build("panel_p", ["conectar", f"registro|{u}|Pepa|#4FE07A", "esperar_pantalla|Salas",
+    p = Build("panel_p", ["conectar", f"registro|{u}|Pepa|#4FE07A", *A_SALAS,
                           "unirse_codigo|codigo_panel", "listo", "esperar_pantalla|Partida", "marca|jugando",
                           "esperar_aviso_global|Hola desde el panel", "reporte|aviso",
                           "esperar_aviso|Fin de la clase", "reporte|cerrada",
@@ -478,7 +482,7 @@ async def escenario_panel(s):
     try:
         sala = await w.crear_sala("codigo_panel")
         await w.esperar_sala_lista()
-        await w.env(t="iniciar")
+        await w.env(t="iniciar", modo="laberinto")  # como el cliente real desde S4-2: el modo agua tira el build
         await p.esperar("MARCA jugando")
         datos = {"usuario": "admin", "contrasena": clave_admin()}
         token = (await asyncio.to_thread(panel, "/login", datos))["token"]
@@ -497,14 +501,14 @@ async def escenario_panel(s):
         jid = next(j["id"] for j in estado["jugadores"] if j["usuario"] == u)
         await asyncio.to_thread(panel, f"/jugadores/{jid}/expulsar", {"motivo": "Prueba automática"}, token)
         r = await p.esperar("REPORTE expulsado")
-        comprobar(r["pantalla"] == "Conexion", "con expulsado el juego vuelve a la pantalla de conexión", r)
+        comprobar(r["pantalla"] == "Login", "con expulsado el juego vuelve al Login", r)
         comprobar("expulsado" in (r["aviso"] or "") and "Prueba automática" in (r["aviso"] or ""),
                   "y muestra el motivo (no 'Se perdió la conexión')", r)
         print("El admin bloquea la cuenta y el jugador intenta volver a entrar")
         await asyncio.to_thread(panel, f"/usuarios/{u}/bloquear", {"motivo": "Prueba de bloqueo"}, token)
         senal("bloqueado")
         r = await p.esperar("REPORTE bloqueado")
-        comprobar(r["pantalla"] == "Perfil" and "Cuenta bloqueada: Prueba de bloqueo" in (r["aviso"] or ""),
+        comprobar(r["pantalla"] == "Login" and "Cuenta bloqueada: Prueba de bloqueo" in (r["aviso"] or ""),
                   "una cuenta bloqueada no puede iniciar sesión y ve el motivo", r)
         await p.esperar("FIN")
     finally:
