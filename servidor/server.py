@@ -18,6 +18,8 @@ Cliente -> servidor:
   {"t":"soltar","obj":"o3","x":0,"y":0,"z":0}  (solo player)
   {"t":"senalar","obj":"o3"}           (solo wizard)
   {"t":"reiniciar"}                    (solo wizard)
+  {"t":"unirse_clase","codigo":"ABCD2345"}   (rol docente, revisión 20/11)
+  {"t":"elegir_reto","reto":3}         (solo el host; 0 = sin reto)
   {"t":"ping"}
 
 Servidor -> cliente:
@@ -138,6 +140,10 @@ class Sala:
         self.jugadores: dict[str, Jugador] = {}
         self.mision: Mision | None = None      # modo legado "Sintetizar agua"
         self.partida: "Partida | None" = None  # modo laberinto (S4)
+        # Rol docente: los retos abiertos de las clases del anfitrión y el elegido.
+        # Sin reto (None) se juega como siempre.
+        self.retos: list[dict] = []
+        self.reto: dict | None = None
 
     def info(self) -> dict:
         return {
@@ -151,7 +157,16 @@ class Sala:
                 {"id": j.id, "nombre": j.nombre, "color": j.color, "listo": j.listo, "rol": j.rol}
                 for j in self.jugadores.values()
             ],
+            # 0 = sin reto: JsonUtility de Unity no lee null en un int
+            "reto": self.reto["id"] if self.reto else 0,
+            "retos": [info_reto(r) for r in self.retos],
         }
+
+
+def info_reto(r: dict) -> dict:
+    tiempo = r.get("tiempo_limite_s") or 0
+    return {"id": r["id"], "nombre": f"{r['clase']} · reto {r['id']}", "jugadores": r["jugadores_por_grupo"],
+            "tiempo_limite_s": tiempo}
 
 
 # ----------------------------------------------------------------- misión
@@ -253,6 +268,10 @@ class Partida:
         self.errores_sala = 0                   # de la sala actual (para sala_completada)
         self.errores_por: dict = {}             # usuario -> errores (para el progreso)
         self.errores_por_concepto: dict = {}    # concepto -> veces (dato de S4-5)
+        self.errores_concepto_por: dict = {}    # usuario -> {concepto -> veces} (intentos del reto)
+        self.reto: dict | None = None           # reto del docente, si la partida es de un reto
+        self.guardados: set = set()             # usuarios con su intento ya guardado
+        self.tiempo_agotado = False
         self.completada = False                 # nivel entero terminado
         self.mensaje = ""
         self.t_inicio = time.monotonic()
@@ -312,6 +331,7 @@ class Partida:
             "palancas": {lado: (lado in self.palancas) for lado in ("wizard", "player")},
             "mensaje": self.mensaje,
             "completada_nivel": self.completada,
+            "tiempo_agotado": self.tiempo_agotado,
         }
 
     def fijar(self, consola_id: str, valor):
@@ -504,11 +524,41 @@ async def progreso(j: "Jugador") -> dict:
     }
 
 
+async def clases_de(j: "Jugador") -> list[dict]:
+    """Clases en las que está inscrito (solo con BD: el rol docente no existe en memoria)."""
+    if db is None or j.usuario_id is None:
+        return []
+    try:
+        return [{"codigo": c["codigo"], "nombre": c["nombre"], "docente": c["docente"]}
+                for c in await db.clases_de_usuario(j.usuario_id)]
+    except Exception as e:
+        log.warning("No se pudieron leer las clases de %s: %s", j.usuario, e)
+        return []
+
+
 async def enviar_perfil(j: "Jugador"):
     # Va el id de conexión porque la sala identifica a los jugadores por él
     # (host, portador, pos); antes llegaba en "bienvenido".
     await j.enviar({"t": "perfil", "id": j.id, "usuario": j.usuario, "nombre": j.nombre,
-                    "color": j.color, "progreso": await progreso(j)})
+                    "color": j.color, "progreso": await progreso(j), "clases": await clases_de(j)})
+
+
+async def unirse_clase(j: "Jugador", m: dict):
+    if db is None:
+        return await j.enviar({"t": "error", "msg": "Las clases necesitan la base de datos del servidor"})
+    codigo = str(m.get("codigo", "")).strip().upper().replace(" ", "")
+    clase = await db.clase_por_codigo(codigo) if len(codigo) == 8 else None
+    if clase is None:
+        return await j.enviar({"t": "error", "msg": f"No existe la clase {codigo}"})
+    if await db.inscribir(clase["id"], j.usuario_id):
+        log.info("%s se unió a la clase %s (%s)", j.usuario, clase["codigo"], clase["nombre"])
+        await registrar("clase_unida", {"usuario": j.usuario, "clase": clase["codigo"]})
+    await j.enviar({"t": "clase_unida", "nombre": clase["nombre"], "docente": clase["docente"]})
+    await enviar_perfil(j)  # con la clase nueva en "clases"
+    sala = j.sala
+    if sala is not None and sala.host_id == j.id and sala.estado == "esperando":
+        sala.retos = await retos_para(j)   # el lobby ya muestra los retos de la clase nueva
+        await difundir(sala, {"t": "sala", "sala": sala.info()})
 
 
 async def iniciar_sesion(j: Jugador, datos: dict):
@@ -571,6 +621,8 @@ async def salir_de_sala(j: Jugador):
     sala = j.sala
     if sala is None:
         return
+    # Si abandona un reto a medias, su intento queda guardado como no completado
+    await guardar_intentos(sala, [j], completado=False)
     sala.jugadores.pop(j.id, None)
     j.sala = None
     j.listo = False
@@ -592,6 +644,7 @@ async def salir_de_sala(j: Jugador):
 async def cerrar_sala(sala: Sala, motivo: str, por_admin: bool = False):
     salas.pop(sala.id, None)
     quedan = list(sala.jugadores.values())
+    await guardar_intentos(sala, quedan, completado=False)
     sala.jugadores.clear()
     for x in quedan:
         x.sala = None
@@ -675,14 +728,35 @@ async def manejar(j: Jugador, m: dict):
     if t in ("listar", "crear_sala", "unirse") and not j.usuario:
         return await j.enviar({"t": "error", "msg": "Inicia sesión primero"})
 
+    if t in ("unirse_clase", "elegir_reto") and not j.usuario:
+        return await j.enviar({"t": "error", "msg": "Inicia sesión primero"})
+
     if t == "listar":
         await j.enviar({"t": "salas", "lista": lista_salas()})
+
+    elif t == "unirse_clase":
+        await unirse_clase(j, m)
+
+    elif t == "elegir_reto":
+        sala = j.sala
+        if sala is None or sala.host_id != j.id or sala.estado != "esperando":
+            return await j.enviar({"t": "error", "msg": "Solo el anfitrión elige el reto, antes de iniciar"})
+        sala.retos = await retos_para(j)   # se relee: el docente pudo cerrar o crear retos
+        try:
+            rid = int(m.get("reto") or 0)
+        except (TypeError, ValueError):
+            rid = 0
+        sala.reto = next((r for r in sala.retos if r["id"] == rid), None)
+        if rid and sala.reto is None:
+            await j.enviar({"t": "error", "msg": "Ese reto ya no está disponible"})
+        await difundir(sala, {"t": "sala", "sala": sala.info()})
 
     elif t == "crear_sala":
         await salir_de_sala(j)
         nombre = str(m.get("nombre_sala", "")).strip()[:30] or f"Sala de {j.nombre}"
         maximo = max(2, min(8, int(m.get("maximo") or 4)))
         sala = Sala(nombre, j, maximo)
+        sala.retos = await retos_para(j)
         salas[sala.id] = sala
         await entrar_a_sala(j, sala)
         log.info("%s creó la sala %s (%s)", j.nombre, sala.id, nombre)
@@ -723,6 +797,9 @@ async def manejar(j: Jugador, m: dict):
             return await j.enviar({"t": "error", "msg": "Se necesitan al menos 2 jugadores"})
         if not all(x.listo for x in sala.jugadores.values() if x.id != sala.host_id):
             return await j.enviar({"t": "error", "msg": "Faltan jugadores por marcar 'Listo'"})
+        reto = sala.reto
+        if reto is not None and len(sala.jugadores) > reto["jugadores_por_grupo"]:
+            return await j.enviar({"t": "error", "msg": f"El reto es para grupos de hasta {reto['jugadores_por_grupo']} jugadores"})
         sala.estado = "jugando"
         puntos = apariciones(sala)
         for pt in puntos:  # posición inicial: si alguien se va antes de moverse, lo que lleve cae ahí
@@ -733,9 +810,15 @@ async def manejar(j: Jugador, m: dict):
         # panel; el cliente de primera persona (S4-2) pedirá modo "laberinto". El retiro
         # definitivo del agua va con la migración del panel a "errores por concepto" (S4-5).
         modo = str(m.get("modo", "agua"))
+        if reto is not None:
+            modo = "laberinto"  # los retos son del laberinto
         if modo == "laberinto":
             sala.mision = None
-            sala.partida = Partida()
+            # Con reto, la semilla del docente: todos los grupos juegan los mismos números
+            sala.partida = Partida(random.Random(reto["semilla"]) if reto else None)
+            sala.partida.reto = reto
+            if reto and reto.get("tiempo_limite_s"):
+                asyncio.create_task(vigilar_tiempo(sala, sala.partida, reto["tiempo_limite_s"]))
             await difundir(sala, {"t": "inicio", "sala": sala.info(),
                                   "nivel": sala.partida.inicio_info(), "apariciones": puntos})
         else:
@@ -743,8 +826,9 @@ async def manejar(j: Jugador, m: dict):
             sala.mision = Mision()
             await difundir(sala, {"t": "inicio", "sala": sala.info(),
                                   "mision": sala.mision.info(), "apariciones": puntos})
-        log.info("Partida iniciada en %s (modo %s)", sala.id, modo)
-        await registrar("partida_iniciada", {"sala": sala.id, "jugadores": len(sala.jugadores), "modo": modo})
+        log.info("Partida iniciada en %s (modo %s%s)", sala.id, modo, f", reto {reto['id']}" if reto else "")
+        await registrar("partida_iniciada", {"sala": sala.id, "jugadores": len(sala.jugadores), "modo": modo,
+                                             "reto": reto["id"] if reto else None})
 
     elif t == "pos":
         if j.sala is None or j.sala.estado != "jugando":
@@ -886,6 +970,8 @@ async def manejar_laberinto(j: Jugador, t: str, m: dict):
     p = sala.partida
     if p.completada:
         return await j.enviar({"t": "error", "msg": "El nivel ya está completo"})
+    if p.tiempo_agotado:
+        return await j.enviar({"t": "error", "msg": "Se acabó el tiempo del reto"})
     lado = j.rol  # "wizard" (anfitrión) o "player"
 
     if t == "dial":
@@ -933,6 +1019,8 @@ async def registrar_error_estq(p: Partida, j: Jugador, consola_id: str):
     p.errores_sala += 1
     p.errores_por[j.usuario] = p.errores_por.get(j.usuario, 0) + 1
     p.errores_por_concepto[concepto] = p.errores_por_concepto.get(concepto, 0) + 1
+    propios = p.errores_concepto_por.setdefault(j.usuario, {})
+    propios[concepto] = propios.get(concepto, 0) + 1
     p.mensaje = f"{concepto}: valor incorrecto"
     await registrar("error_estequiometria", {
         "sala": p.sala_num, "concepto": concepto,
@@ -957,7 +1045,52 @@ async def completar_sala(p: Partida, sala: Sala):
         p.t_sala = time.monotonic()
 
 
+async def retos_para(j: Jugador) -> list[dict]:
+    if db is None or j.usuario_id is None:
+        return []
+    try:
+        return await db.retos_abiertos_de_usuario(j.usuario_id)
+    except Exception as e:
+        log.warning("No se pudieron leer los retos de %s: %s", j.usuario, e)
+        return []
+
+
+async def guardar_intentos(sala: Sala, quienes: list, completado: bool):
+    """Un intento por jugador (Wizard incluido: en un reto los dos lados cuentan) si la
+    partida es de un reto. Cada jugador se guarda UNA vez: al terminar el nivel, al
+    agotarse el tiempo o al irse a medias, lo que pase primero."""
+    p = sala.partida
+    if p is None or p.reto is None or db is None or sala.estado != "jugando":
+        return
+    segundos = round(time.monotonic() - p.t_inicio, 1)
+    for jug in quienes:
+        if not jug.usuario or jug.usuario_id is None or jug.usuario in p.guardados:
+            continue
+        p.guardados.add(jug.usuario)
+        try:
+            await db.guardar_intento(p.reto["id"], sala.id, jug.usuario_id, segundos,
+                                     p.errores_concepto_por.get(jug.usuario, {}), completado)
+            log.info("Intento del reto %d guardado: %s en %s (%.1f s, %s)", p.reto["id"], jug.usuario,
+                     sala.id, segundos, "completado" if completado else "sin completar")
+        except Exception as e:
+            log.warning("No se pudo guardar el intento de %s: %s", jug.usuario, e)
+
+
+async def vigilar_tiempo(sala: Sala, p: Partida, limite_s: int):
+    """Tiempo límite del reto: al vencer, la partida se detiene (no se aceptan más
+    acciones) y se guardan los intentos como no completados."""
+    await asyncio.sleep(limite_s)
+    if sala.partida is not p or p.completada or salas.get(sala.id) is not sala:
+        return
+    p.tiempo_agotado = True
+    p.mensaje = "Se acabó el tiempo del reto"
+    log.info("Tiempo agotado en %s (reto %d)", sala.id, p.reto["id"])
+    await guardar_intentos(sala, list(sala.jugadores.values()), completado=False)
+    await difundir(sala, {"t": "sala_estado", **p.sala_estado()})
+
+
 async def guardar_nivel(sala: Sala, p: Partida):
+    await guardar_intentos(sala, list(sala.jugadores.values()), completado=True)
     # Un registro por cada Player presente al terminar el nivel; el Wizard guía.
     duracion = round(time.monotonic() - p.t_inicio, 1)
     for jug in [x for x in sala.jugadores.values() if x.rol == "player"]:
