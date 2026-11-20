@@ -8,8 +8,8 @@ public class PantallaPerfil : ControladorPantalla
 {
     const int MaxHistorial = 5;
     readonly VisualElement chipPerfil, historial;
-    readonly Label usuario, aviso, info, completadas, mejor, errores, sinHistorial;
-    readonly TextField nombre;
+    readonly Label usuario, aviso, info, completadas, mejor, errores, sinHistorial, clases;
+    readonly TextField nombre, codigoClase;
     readonly System.Action repintarColor;
 
     public PantallaPerfil(MenuLobby menu, VisualElement raiz) : base(menu, raiz)
@@ -24,6 +24,10 @@ public class PantallaPerfil : ControladorPantalla
         errores = Q<Label>("errores");
         sinHistorial = Q<Label>("sin-historial");
         nombre = Q<TextField>("nombre");
+        clases = Q<Label>("clases");
+        codigoClase = Q<TextField>("codigo-clase");
+        Ui.Placeholder(codigoClase, "Código de 8 caracteres");
+        Q<Button>("unirse-clase").clicked += () => menu.UnirseClase(codigoClase.value);
 
         Q<Button>("guardar").clicked += Guardar;
         Q<Button>("volver").clicked += menu.Volver;
@@ -47,6 +51,10 @@ public class PantallaPerfil : ControladorPantalla
         usuario.text = p.usuario;
         Ui.Chip(aviso, menu.Aviso);
         Ui.Chip(info, menu.Info);
+
+        clases.text = p.clases == null || p.clases.Count == 0
+            ? "Todavía no estás en ninguna clase. Pide el código a tu docente."
+            : string.Join("\n", p.clases.Select(c => $"{c.nombre} · {c.docente} ({c.codigo})"));
 
         var pr = p.progreso ?? new InfoProgreso();
         completadas.text = pr.completadas.ToString();

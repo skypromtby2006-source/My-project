@@ -94,6 +94,7 @@ public class MenuLobby : MonoBehaviour
                 tAviso = Time.time;
             }
             if (m.t == "aviso") { avisoGlobal = m.msg ?? ""; tAvisoGlobal = Time.time; }
+            if (m.t == "clase_unida") { aviso = ""; info = $"Te uniste a la clase {m.nombre} ({m.docente})"; }
             if (m.t == "inicio") { pantalla = Pantalla.Partida; tMensaje = -99; erroresPrevios = 0; }
             if (m.t == "perfil") AlRecibirPerfil(m.perfil);
             if (m.t == "estado")
@@ -394,6 +395,30 @@ public class MenuLobby : MonoBehaviour
     }
     public void Unirse(string codigo) => Red.Unirse((codigo ?? "").Trim().ToUpperInvariant());
     public void Iniciar() => Red.IniciarPartida();
+
+    // ---------- Rol docente (revisión 20/11) ----------
+    public void UnirseClase(string codigo)
+    {
+        // Mismo formato que el servidor: 8 caracteres; espacios y minúsculas se toleran
+        string c = (codigo ?? "").Replace(" ", "").Trim().ToUpperInvariant();
+        sucio = true;
+        if (c.Length != 8) { aviso = "El código de clase tiene 8 caracteres"; info = ""; tAviso = Time.time; return; }
+        aviso = info = "";
+        Red.UnirseClase(c);
+    }
+
+    // Botón del anfitrión en el Lobby: pasa al siguiente reto de la lista (y después a "sin reto")
+    public void CambiarReto()
+    {
+        var s = Red.SalaActual;
+        if (s == null) return;
+        var ids = new List<int> { 0 };
+        ids.AddRange(s.retos.ConvertAll(r => r.id));
+        int i = ids.IndexOf(s.reto);
+        Red.ElegirReto(ids[(i + 1) % ids.Count]);
+    }
+
+    public void ElegirReto(int id) => Red.ElegirReto(id);
 
     public void CambiarListo()
     {

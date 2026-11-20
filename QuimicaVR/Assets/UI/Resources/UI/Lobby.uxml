@@ -29,6 +29,11 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
+        <ui:VisualElement name="fila-reto" class="row g14">
+            <ui:Label name="reto" class="chip ok lg" />
+            <ui:Button name="cambiar-reto" text="Cambiar reto" class="btn sec" />
+        </ui:VisualElement>
+
         <ui:VisualElement class="row g14">
             <ui:Label name="estado" class="chip warn lg" />
             <ui:Label name="aviso" class="chip warn lg" />

@@ -22,6 +22,14 @@
                     <ui:Label text="Color" class="lbl" />
                     <ui:VisualElement name="colores" class="row g8" />
                 </ui:VisualElement>
+                <ui:VisualElement>
+                    <ui:Label text="Mis clases" class="lbl" />
+                    <ui:Label name="clases" class="parrafo" />
+                    <ui:VisualElement class="row g8">
+                        <ui:TextField name="codigo-clase" max-length="9" class="inp grow" />
+                        <ui:Button name="unirse-clase" text="Unirse a clase" class="btn sec" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
                 <ui:Label name="aviso" class="chip warn" />
                 <ui:Label name="info" class="chip ok" />
                 <ui:VisualElement class="grow" />

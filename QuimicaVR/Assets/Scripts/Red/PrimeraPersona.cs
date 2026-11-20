@@ -143,7 +143,14 @@ public class PrimeraPersona : MonoBehaviour
         {
             string txt = $"Sala {e.sala}/5 — {e.nombre}\nConcepto: {e.concepto}\n{e.reaccion}\n{Numeros(e)}";
             if (!string.IsNullOrEmpty(e.mensaje)) txt += $"\n» {e.mensaje}";
-            GUI.Box(new Rect(10, 10, 360, 120), txt);
+            var reto = ClienteRed.I.RetoActual;
+            if (reto != null && reto.tiempo_limite_s > 0)
+            {
+                // Reloj del reto: solo informativo, el que corta la partida es el servidor
+                int resta = Mathf.Max(0, Mathf.CeilToInt(reto.tiempo_limite_s - (Time.time - ClienteRed.I.InicioReto)));
+                txt += e.tiempo_agotado ? "\nReto: tiempo agotado" : $"\nReto: quedan {resta / 60}:{resta % 60:00}";
+            }
+            GUI.Box(new Rect(10, 10, 360, 140), txt);
         }
 
         if (apuntado != null && editando == null)

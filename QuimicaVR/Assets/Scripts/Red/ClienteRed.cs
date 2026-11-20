@@ -22,11 +22,16 @@ using UnityEngine;
     public List<EntradaHistorial> historial = new List<EntradaHistorial>();
 }
 
+// Rol docente (revisión 20/11): clases del estudiante y retos que puede elegir el anfitrión
+[Serializable] public class InfoClase { public string codigo, nombre, docente; }
+[Serializable] public class InfoReto { public int id; public string nombre; public int jugadores; public int tiempo_limite_s; }
+
 [Serializable] public class InfoPerfil
 {
     public string id;              // id de esta conexión, el mismo que usa la sala
     public string usuario, nombre, color;
     public InfoProgreso progreso;
+    public List<InfoClase> clases = new List<InfoClase>();
 }
 
 [Serializable] public class InfoSala
@@ -34,6 +39,8 @@ using UnityEngine;
     public string id; public string nombre; public string host;
     public int maximo; public int cantidad; public string estado;
     public List<InfoJugador> jugadores = new List<InfoJugador>();
+    public int reto;               // 0 = sin reto (se juega como siempre)
+    public List<InfoReto> retos = new List<InfoReto>();   // los del anfitrión
 }
 
 // Misión: los nombres de campo son idénticos a los de server.py (Mision.info)
@@ -90,6 +97,7 @@ using UnityEngine;
 {
     public int sala; public string nombre, concepto, reaccion, luz, puerta, mensaje;
     public bool completada_nivel;
+    public bool tiempo_agotado;    // el reto tenía tiempo límite y se acabó
     public PalancasEstado palancas;
     public InfoDatos datos;
 }
@@ -108,6 +116,7 @@ using UnityEngine;
     public string t;            // tipo de mensaje
     public string id, nombre, msg;
     public string motivo;       // en "expulsado" y "sala_cerrada" (acciones del panel web)
+    public string docente;      // en "clase_unida"
     public InfoSala sala;
     public List<InfoSala> lista;
     public InfoMision mision;
@@ -148,6 +157,9 @@ public class ClienteRed : MonoBehaviour
     public InfoNivel NivelActual { get; private set; }
     public InfoSalaEstado SalaEstadoActual { get; private set; }
     public bool EsLaberinto => NivelActual != null;
+    // Reto de la partida en curso (null = sin reto) y cuándo empezó, para el reloj del HUD
+    public InfoReto RetoActual { get; private set; }
+    public float InicioReto { get; private set; }
 
     // El rol no se guarda: se lee de la sala cada vez, así la única fuente es el servidor
     public string MiRol => SalaActual?.jugadores.Find(j => j.id == MiId)?.rol ?? "player";
@@ -233,6 +245,9 @@ public class ClienteRed : MonoBehaviour
     public void EditarPerfil(string nombre, string color) =>
         Enviar("{\"t\":\"perfil_editar\",\"nombre\":" + Json(nombre) + ",\"color\":" + Json(color) + "}");
     public void VerPerfil() => Enviar("{\"t\":\"perfil_ver\"}");
+    public void UnirseClase(string codigo) => Enviar("{\"t\":\"unirse_clase\",\"codigo\":" + Json(codigo) + "}");
+    // Solo el anfitrión; 0 = sin reto. El servidor responde con "sala" (campo reto)
+    public void ElegirReto(int id) => Enviar("{\"t\":\"elegir_reto\",\"reto\":" + id + "}");
 
     // ---------- Acciones de lobby ----------
     public void ListarSalas() => Enviar("{\"t\":\"listar\"}");
@@ -290,6 +305,8 @@ public class ClienteRed : MonoBehaviour
                 case "inicio":
                     SalaActual = m.sala; MisionActual = m.mision; NivelActual = m.nivel;
                     SalaEstadoActual = m.nivel != null ? m.nivel.sala : null;
+                    RetoActual = m.sala != null && m.sala.reto != 0 ? m.sala.retos.Find(r => r.id == m.sala.reto) : null;
+                    InicioReto = Time.time;
                     break;
                 case "sala_estado":
                     m.salaEstado = JsonUtility.FromJson<InfoSalaEstado>(linea);

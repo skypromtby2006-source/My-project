@@ -107,6 +107,19 @@ public class PruebaAutomatica : MonoBehaviour
                 yield return Esperar(() => perfilesRecibidos > previos, "respuesta a perfil_editar");
                 break;
             case "volver": menu.Volver(); break;
+            // --- rol docente (revisión 20/11): el código lo escribe el orquestador en una señal ---
+            case "unirse_clase":
+                var arch = Path.Combine(senales, Arg(1));
+                yield return Esperar(() => File.Exists(arch), "señal " + Arg(1));
+                int clasesAntes = Red.MiPerfil?.clases?.Count ?? 0;
+                menu.UnirseClase(File.ReadAllText(arch).Trim());
+                yield return Esperar(() => (Red.MiPerfil?.clases?.Count ?? 0) > clasesAntes, "la clase en el perfil");
+                break;
+            case "cambiar_reto":
+                int retoAntes = Red.SalaActual?.reto ?? 0;
+                menu.CambiarReto();
+                yield return Esperar(() => Red.SalaActual != null && Red.SalaActual.reto != retoAntes, "el reto elegido");
+                break;
             case "llevar": yield return Llevar(Arg(1)); break;
 
             // --- laberinto (S4): el build manda las mismas intenciones que con E ---
@@ -384,6 +397,8 @@ public class PruebaAutomatica : MonoBehaviour
         public bool mision_completada;
         public int sala_lab = -1;          // laberinto: sala actual (1..5)
         public bool nivel_completado;      // laberinto: el portón final abierto
+        public string info;
+        public int clases = -1, reto = -1, retos = -1;   // rol docente
     }
 
     EstadoPrueba Estado()
@@ -397,6 +412,8 @@ public class PruebaAutomatica : MonoBehaviour
             escena = gestor.HayEscena, mision_completada = Red.EstadoActual?.completada ?? false,
             sala_lab = Red.SalaEstadoActual?.sala ?? -1,
             nivel_completado = Red.SalaEstadoActual?.completada_nivel ?? false,
+            info = menu.Info, clases = Red.MiPerfil?.clases?.Count ?? -1,
+            reto = Red.SalaActual?.reto ?? -1, retos = Red.SalaActual?.retos?.Count ?? -1,
         };
         if (gestor.PosicionLocal is Vector3 p) { e.local = true; e.local_x = p.x; e.local_z = p.z; }
         if (Red.SalaActual != null) e.jugadores_sala = Red.SalaActual.jugadores.Select(j => j.id).ToList();

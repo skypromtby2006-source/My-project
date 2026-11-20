@@ -7,9 +7,9 @@ using UnityEngine.UIElements;
 // servidor (server.py, "iniciar"): aquí solo se explican antes de que rebote.
 public class PantallaLobby : ControladorPantalla
 {
-    readonly Label nombre, codigo, estado, aviso;
-    readonly VisualElement ladoWizard, ladoPlayer;
-    readonly Button listo, iniciar;
+    readonly Label nombre, codigo, estado, aviso, reto;
+    readonly VisualElement ladoWizard, ladoPlayer, filaReto;
+    readonly Button listo, iniciar, cambiarReto;
     string firmaJugadores;
 
     public PantallaLobby(MenuLobby menu, VisualElement raiz) : base(menu, raiz)
@@ -22,6 +22,10 @@ public class PantallaLobby : ControladorPantalla
         ladoPlayer = Q<ScrollView>("lado-player");
         listo = Q<Button>("listo");
         iniciar = Q<Button>("iniciar");
+        filaReto = Q<VisualElement>("fila-reto");
+        reto = Q<Label>("reto");
+        cambiarReto = Q<Button>("cambiar-reto");
+        cambiarReto.clicked += menu.CambiarReto;
 
         Q<Button>("salir").clicked += menu.SalirDeSala;
         listo.clicked += menu.CambiarListo;
@@ -60,6 +64,15 @@ public class PantallaLobby : ControladorPantalla
         estado.text = texto;
         estado.EnableInClassList("warn", !sePuede);
         estado.EnableInClassList("ok", sePuede);
+
+        // Reto del docente: solo aparece si el anfitrión está en una clase con retos abiertos.
+        // Lo elige el anfitrión; los demás ven cuál quedó.
+        var elegido = s.reto != 0 ? s.retos.Find(r => r.id == s.reto) : null;
+        Ui.Mostrar(filaReto, s.retos.Count > 0 || s.reto != 0);
+        reto.text = elegido == null ? "Sin reto: partida libre"
+            : $"Reto: {elegido.nombre} · grupos de hasta {elegido.jugadores}"
+              + (elegido.tiempo_limite_s > 0 ? $" · {elegido.tiempo_limite_s / 60} min" : "");
+        Ui.Mostrar(cambiarReto, soyHost);
 
         // El aviso de error (p. ej. el rebote del servidor) no repite el chip de estado
         Ui.Chip(aviso, menu.Aviso);
