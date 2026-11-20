@@ -35,8 +35,10 @@ _CONFIG = {
 
 # Columnas de fecha y booleanas que se normalizan al leer (SQLite las da como texto y 0/1)
 _FECHAS = ("fecha", "creado", "ultimo_login")
-_BOOLEANOS = ("bloqueado",)
-TABLAS = ("misiones_completadas", "eventos", "usuarios", "logs", "auditoria_admin")
+_BOOLEANOS = ("bloqueado", "activo", "abierto", "completado")
+# Orden de borrado para SQLite (con foreign_keys=ON): primero las tablas que apuntan a otras
+TABLAS = ("intentos", "retos", "inscripciones", "clases", "docentes",
+          "misiones_completadas", "eventos", "usuarios", "logs", "auditoria_admin")
 
 
 class Dialecto:
@@ -271,6 +273,45 @@ class Repositorio:
                     ip TEXT,
                     fecha {d.tstz} DEFAULT {d.ahora})""",
             "CREATE INDEX IF NOT EXISTS eventos_por_tipo ON eventos (tipo)",
+            # ---- rol docente (revisión 20/11). La contraseña se guarda como hash scrypt
+            # (auth.hash_contrasena), nunca en claro.
+            f"""CREATE TABLE IF NOT EXISTS docentes (
+                    id {d.serial},
+                    usuario TEXT UNIQUE NOT NULL,
+                    nombre TEXT NOT NULL,
+                    hash TEXT NOT NULL,
+                    activo BOOLEAN DEFAULT true,
+                    creado {d.tstz} DEFAULT {d.ahora})""",
+            f"""CREATE TABLE IF NOT EXISTS clases (
+                    id {d.serial},
+                    codigo TEXT UNIQUE NOT NULL,
+                    docente_id INT NOT NULL REFERENCES docentes(id),
+                    nombre TEXT NOT NULL,
+                    creado {d.tstz} DEFAULT {d.ahora})""",
+            f"""CREATE TABLE IF NOT EXISTS inscripciones (
+                    clase_id INT NOT NULL REFERENCES clases(id),
+                    usuario_id INT NOT NULL REFERENCES usuarios(id),
+                    fecha {d.tstz} DEFAULT {d.ahora},
+                    PRIMARY KEY (clase_id, usuario_id))""",
+            f"""CREATE TABLE IF NOT EXISTS retos (
+                    id {d.serial},
+                    clase_id INT NOT NULL REFERENCES clases(id),
+                    nivel TEXT NOT NULL,
+                    semilla INT NOT NULL,
+                    jugadores_por_grupo INT NOT NULL,
+                    tiempo_limite_s INT,
+                    abierto BOOLEAN DEFAULT true,
+                    creado {d.tstz} DEFAULT {d.ahora})""",
+            f"""CREATE TABLE IF NOT EXISTS intentos (
+                    id {d.serial},
+                    reto_id INT NOT NULL REFERENCES retos(id),
+                    sala TEXT NOT NULL,
+                    usuario_id INT NOT NULL REFERENCES usuarios(id),
+                    segundos REAL NOT NULL,
+                    errores_concepto {d.json},
+                    completado BOOLEAN NOT NULL,
+                    fecha {d.tstz} DEFAULT {d.ahora})""",
+            "CREATE INDEX IF NOT EXISTS intentos_por_reto ON intentos (reto_id)",
         ]
         for s in sentencias:
             await self.bd.execute(s)
@@ -477,6 +518,158 @@ class Repositorio:
             f"SELECT id, nivel, mensaje, fecha FROM logs {donde} ORDER BY id DESC "
             f"LIMIT {int(por_pagina)} OFFSET {(int(pagina) - 1) * int(por_pagina)}", *args)
         return total, filas
+
+    # ------------------------------------------------------------- docentes (solo el admin los crea)
+    async def crear_docente(self, usuario: str, nombre: str, hash_: str):
+        """None si el usuario ya existe (la restricción UNIQUE decide, como en usuarios)."""
+        d = self.d
+        return await self._fila(
+            f"INSERT INTO docentes (usuario, nombre, hash) VALUES ({d.ps(1, 3)}) "
+            f"ON CONFLICT (usuario) DO NOTHING RETURNING id, usuario, nombre, activo, creado",
+            usuario, nombre, hash_)
+
+    async def buscar_docente(self, usuario: str):
+        """Con el hash: solo lo usa el login. Nunca se manda al panel."""
+        d = self.d
+        return await self._fila(
+            f"SELECT id, usuario, nombre, hash, activo FROM docentes WHERE usuario = {d.p(1)}", usuario)
+
+    async def docente_por_id(self, docente_id: int):
+        d = self.d
+        return await self._fila(
+            f"SELECT id, usuario, nombre, activo FROM docentes WHERE id = {d.p(1)}", docente_id)
+
+    async def listar_docentes(self):
+        return await self._filas("""
+            SELECT dc.usuario, dc.nombre, dc.activo, dc.creado, count(c.id) AS clases
+            FROM docentes dc LEFT JOIN clases c ON c.docente_id = dc.id
+            GROUP BY dc.id ORDER BY dc.usuario""")
+
+    async def fijar_docente_activo(self, usuario: str, activo: bool) -> bool:
+        d = self.d
+        fila = await self.bd.fetchrow(
+            f"UPDATE docentes SET activo = {d.p(2)} WHERE usuario = {d.p(1)} RETURNING id", usuario, activo)
+        return fila is not None
+
+    # ------------------------------------------------------------- clases e inscripciones
+    async def crear_clase(self, docente_id: int, nombre: str, codigo: str):
+        """None si el código ya existe (quien llama sortea otro)."""
+        d = self.d
+        return await self._fila(
+            f"INSERT INTO clases (codigo, docente_id, nombre) VALUES ({d.ps(1, 3)}) "
+            f"ON CONFLICT (codigo) DO NOTHING RETURNING id, codigo, nombre, creado",
+            codigo, docente_id, nombre)
+
+    async def clases_de_docente(self, docente_id: int):
+        d = self.d
+        return await self._filas(f"""
+            SELECT c.id, c.codigo, c.nombre, c.creado, count(i.usuario_id) AS inscritos
+            FROM clases c LEFT JOIN inscripciones i ON i.clase_id = c.id
+            WHERE c.docente_id = {d.p(1)} GROUP BY c.id ORDER BY c.id DESC""", docente_id)
+
+    async def clase(self, clase_id: int):
+        d = self.d
+        return await self._fila(
+            f"SELECT id, codigo, docente_id, nombre, creado FROM clases WHERE id = {d.p(1)}", clase_id)
+
+    async def clase_por_codigo(self, codigo: str):
+        d = self.d
+        return await self._fila(
+            f"SELECT c.id, c.codigo, c.nombre, dc.nombre AS docente FROM clases c "
+            f"JOIN docentes dc ON dc.id = c.docente_id WHERE c.codigo = {d.p(1)}", codigo)
+
+    async def inscribir(self, clase_id: int, usuario_id: int) -> bool:
+        """False si ya estaba inscrito."""
+        d = self.d
+        fila = await self.bd.fetchrow(
+            f"INSERT INTO inscripciones (clase_id, usuario_id) VALUES ({d.ps(1, 2)}) "
+            f"ON CONFLICT DO NOTHING RETURNING clase_id", clase_id, usuario_id)
+        return fila is not None
+
+    async def inscritos(self, clase_id: int):
+        d = self.d
+        return await self._filas(
+            f"SELECT u.usuario, u.nombre, u.color, i.fecha FROM inscripciones i "
+            f"JOIN usuarios u ON u.id = i.usuario_id WHERE i.clase_id = {d.p(1)} ORDER BY u.usuario", clase_id)
+
+    async def clases_de_usuario(self, usuario_id: int):
+        d = self.d
+        return await self._filas(
+            f"SELECT c.id, c.codigo, c.nombre, dc.nombre AS docente FROM inscripciones i "
+            f"JOIN clases c ON c.id = i.clase_id JOIN docentes dc ON dc.id = c.docente_id "
+            f"WHERE i.usuario_id = {d.p(1)} ORDER BY c.id", usuario_id)
+
+    async def estudiantes_de_docente(self, docente_id: int) -> set[str]:
+        """Usuarios inscritos en alguna clase del docente: filtra Partidas en vivo y Logs."""
+        d = self.d
+        filas = await self.bd.fetch(
+            f"SELECT DISTINCT u.usuario FROM inscripciones i JOIN clases c ON c.id = i.clase_id "
+            f"JOIN usuarios u ON u.id = i.usuario_id WHERE c.docente_id = {d.p(1)}", docente_id)
+        return {f["usuario"] for f in filas}
+
+    # ------------------------------------------------------------- retos e intentos
+    _RETO = ("r.id, r.clase_id, c.nombre AS clase, c.docente_id, r.nivel, r.semilla, "
+             "r.jugadores_por_grupo, r.tiempo_limite_s, r.abierto, r.creado")
+
+    async def crear_reto(self, clase_id: int, nivel: str, semilla: int, jugadores: int, tiempo_limite_s):
+        d = self.d
+        fila = await self.bd.fetchrow(
+            f"INSERT INTO retos (clase_id, nivel, semilla, jugadores_por_grupo, tiempo_limite_s) "
+            f"VALUES ({d.ps(1, 5)}) RETURNING id", clase_id, nivel, semilla, jugadores, tiempo_limite_s)
+        return await self.reto(fila["id"])
+
+    async def reto(self, reto_id: int):
+        d = self.d
+        return await self._fila(
+            f"SELECT {self._RETO} FROM retos r JOIN clases c ON c.id = r.clase_id WHERE r.id = {d.p(1)}", reto_id)
+
+    async def retos_de_docente(self, docente_id: int):
+        d = self.d
+        return await self._filas(f"""
+            SELECT {self._RETO}, count(DISTINCT it.usuario_id) AS jugaron
+            FROM retos r JOIN clases c ON c.id = r.clase_id
+            LEFT JOIN intentos it ON it.reto_id = r.id
+            WHERE c.docente_id = {d.p(1)} GROUP BY r.id, c.id ORDER BY r.id DESC""", docente_id)
+
+    async def cerrar_reto(self, reto_id: int):
+        d = self.d
+        await self.bd.execute(f"UPDATE retos SET abierto = false WHERE id = {d.p(1)}", reto_id)
+
+    async def retos_abiertos_de_usuario(self, usuario_id: int):
+        """Los retos abiertos de las clases en las que está inscrito el anfitrión."""
+        d = self.d
+        return await self._filas(
+            f"SELECT {self._RETO} FROM retos r JOIN clases c ON c.id = r.clase_id "
+            f"JOIN inscripciones i ON i.clase_id = c.id "
+            f"WHERE i.usuario_id = {d.p(1)} AND r.abierto ORDER BY r.id", usuario_id)
+
+    async def guardar_intento(self, reto_id: int, sala: str, usuario_id: int, segundos: float,
+                              errores_concepto: dict, completado: bool):
+        d = self.d
+        await self.bd.execute(
+            f"INSERT INTO intentos (reto_id, sala, usuario_id, segundos, errores_concepto, completado) "
+            f"VALUES ({d.ps(1, 6)})", reto_id, sala, usuario_id, segundos,
+            json.dumps(errores_concepto, ensure_ascii=False), completado)
+
+    async def intentos(self, reto_id: int | None = None, usuario: str | None = None,
+                       docente_id: int | None = None):
+        """Intentos con el usuario y el reto. Filtros opcionales y combinables."""
+        d = self.d
+        condiciones, args = [], []
+        for col, val in (("it.reto_id", reto_id), ("u.usuario", usuario), ("c.docente_id", docente_id)):
+            if val is not None:
+                args.append(val)
+                condiciones.append(f"{col} = {d.p(len(args))}")
+        donde = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
+        filas = await self._filas(
+            f"SELECT it.id, it.reto_id, c.nombre AS clase, it.sala, u.usuario, u.nombre, it.segundos, "
+            f"it.errores_concepto, it.completado, it.fecha FROM intentos it "
+            f"JOIN usuarios u ON u.id = it.usuario_id JOIN retos r ON r.id = it.reto_id "
+            f"JOIN clases c ON c.id = r.clase_id {donde} ORDER BY it.id", *args)
+        for f in filas:
+            e = f["errores_concepto"]
+            f["errores_concepto"] = (json.loads(e) if isinstance(e, str) else e) or {}
+        return filas
 
     async def cerrar(self):
         await self.bd.cerrar()
