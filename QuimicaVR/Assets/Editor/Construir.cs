@@ -23,6 +23,8 @@ namespace Quimica.EditorTools
             ConfigurarDemo.AsegurarRecursos();
             ConfigurarDemo.AplicarPlayerSettings();
             ConfigurarUI.AsegurarPanel();   // el menú de UI Toolkit lo carga desde Resources
+            ConfigurarArte.Asegurar(forzar: false);   // prefabs de KayKit y Volume (S4-4)
+            ConfigurarArte.AplicarAmbiente();         // niebla y luz ambiente en la escena
             AssetDatabase.SaveAssets();
 
             var escenas = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray();

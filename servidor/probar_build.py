@@ -376,7 +376,7 @@ async def escenario_laberinto(s):
         await srv.arrancar()
         build = Build("laberinto", graficos=True, pasos=[
             "conectar", f"registro|{w}|WLab{s}|#3FA9F5", *A_SALAS,
-            *partida("p1"), "reporte|p1_inicio", "capturas",
+            *partida("p1"), "reporte|p1_inicio", "capturas", "medir_fps|4",
             ESTE_DE_D1, EMPUJE_OESTE, "esperar|0.2", "reporte|dc_cerrada",
             f"dial|dial_h2|{h2}", "marca|s1_wiz_listo", "esperar_senal|s1_baja", "palanca|D1",
             "esperar_sala|2", "reporte|sala2",
@@ -397,6 +397,9 @@ async def escenario_laberinto(s):
         remoto = next((x for x in r["remotos"] if x["id"] == bot.id), None)
         comprobar(remoto is not None, "B1: el Wizard ve la cápsula del Player", r["remotos"])
         comprobar_capturas(await build.esperar("REPORTE capturas", timeout=90))
+        f = await build.esperar("REPORTE fps", timeout=30)
+        comprobar(f["fps"] >= 60, f"≥ 60 FPS a 1920×1080 ({f['fps']:.0f} FPS, {f['ms_medio']:.1f} ms de media, "
+                                 f"peor cuadro {f['ms_peor']:.1f} ms, {f['dispositivo']})", f)
 
         r = await build.esperar("REPORTE dc_cerrada")
         comprobar(r["local_x"] > 9.0, "la puerta CERRADA bloquea: el Wizard no la cruza", r["local_x"])

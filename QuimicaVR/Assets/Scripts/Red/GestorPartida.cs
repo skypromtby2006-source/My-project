@@ -58,6 +58,7 @@ public class GestorPartida : MonoBehaviour
 
     void Start()
     {
+        gameObject.AddComponent<Depuracion>();   // F3: FPS y etiquetas de depuración (S4-4)
         cam = Camera.main;
         var red = ClienteRed.I;
         red.AlRecibir += m =>

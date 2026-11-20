@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 // Jugador en primera persona (SPRINT4 §3.3): CharacterController + vista con el mouse
 // (cursor bloqueado; ESC libera y abre la pausa), WASD, E para interactuar por un
@@ -50,6 +51,9 @@ public class PrimeraPersona : MonoBehaviour
         camGo.AddComponent<AudioListener>();
 
         var fp = go.AddComponent<PrimeraPersona>();
+        // Sin esto URP ignora el Volume del laberinto (tonemapping, bloom): la cámara se
+        // crea por código y el post-proceso viene apagado por defecto.
+        cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
         fp.cam = cam;
         fp.cc = cc;
         fp.teclado = new EntradaTeclado(sensibilidad);
