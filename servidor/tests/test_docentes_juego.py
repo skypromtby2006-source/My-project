@@ -109,6 +109,9 @@ async def test_grupo_mas_grande_que_el_reto_no_puede_iniciar(servidor_juego, bot
     await w.env(t="crear_sala", maximo=4)
     sala = (await w.rec("sala"))["sala"]
     await w.env(t="elegir_reto", reto=reto["id"])
+    # Se consume el "sala" del reto elegido: con solo el Wizard cumple "todos listos" y
+    # b.listo(w) lo tomaría por el listo de un jugador (carrera que falló en PostgreSQL)
+    await w.rec("sala", cuando=lambda m: m["sala"]["reto"] == reto["id"])
     for n in ("p_uno", "p_dos"):
         b = await bot(servidor_juego, n)
         await b.env(t="unirse", sala_id=sala["id"])
