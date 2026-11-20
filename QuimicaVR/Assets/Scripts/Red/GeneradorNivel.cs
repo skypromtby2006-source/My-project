@@ -30,7 +30,12 @@ public class GeneradorNivel
     bool hayArte;
     const float GROSOR_PANEL = .25f;   // el de los prefabs Pared y Puerta
     // Luz por sala: puntual, sin sombras (solo la luz principal de la escena las hace)
-    const float RANGO_LUZ = 7f, INTENSIDAD_LUZ = 6f;
+    const float RANGO_LUZ = 9f, INTENSIDAD_LUZ = 6f;
+    // Revisión 20/11: la luz principal mezcla el color de la sala con un blanco cálido (con el
+    // color puro todo el cuarto quedaba de un solo tono y la piedra perdía su color); el color
+    // puro va en una luz chica sobre la consola, que así se destaca como lo que hay que usar.
+    const float MEZCLA_BLANCO = .45f, RANGO_ACENTO = 3.5f, INTENSIDAD_ACENTO = 4f;
+    static readonly Color BLANCO_CALIDO = new Color(1f, .94f, .86f);
     public const string NombreEtiqueta = "EtiquetaDepuracion";
 
     static readonly Color GRIS = new Color(.45f, .47f, .52f);
@@ -162,13 +167,25 @@ public class GeneradorNivel
         int c0 = (consolas[0].pos[0] - 1) / 4 * 4 + 1;
         var go = new GameObject($"luz_{lado}_sala{s.n}");
         go.transform.SetParent(Raiz.transform);
-        go.transform.position = Mundo(lado, c0 + 1, 2, ALTO_PARED - .5f);
+        // Un poco por debajo del techo: más arriba, el techo y la franja alta quedaban a oscuras
+        go.transform.position = Mundo(lado, c0 + 1, 2, ALTO_PARED - .8f);
+        var col = ColorUtility.TryParseHtmlString(s.luz ?? "", out var c) ? c : Color.white;
         var luz = go.AddComponent<Light>();
         luz.type = LightType.Point;
-        luz.color = ColorUtility.TryParseHtmlString(s.luz ?? "", out var col) ? col : Color.white;
+        luz.color = Color.Lerp(col, BLANCO_CALIDO, MEZCLA_BLANCO);
         luz.range = RANGO_LUZ;
         luz.intensity = INTENSIDAD_LUZ;
         luz.shadows = LightShadows.None;
+
+        var acento = new GameObject($"acento_{lado}_sala{s.n}");
+        acento.transform.SetParent(Raiz.transform);
+        acento.transform.position = Mundo(lado, consolas[0].pos[0], consolas[0].pos[1], 1.9f);
+        var la = acento.AddComponent<Light>();
+        la.type = LightType.Point;
+        la.color = col;
+        la.range = RANGO_ACENTO;
+        la.intensity = INTENSIDAD_ACENTO;
+        la.shadows = LightShadows.None;
     }
 
     void ConstruirLado(string lado, InfoLado l)
