@@ -218,3 +218,21 @@ Eventos nuevos en la tabla `eventos` (para las estadísticas por concepto con pa
 - `sala_completada {sala, segundos, errores}`.
 
 Progreso del perfil en el laberinto: **nivel completado**, mejor tiempo y tiempo por sala.
+
+## Revisión 20/11 — Rol docente: clases y retos
+
+Requieren sesión y una BD (PostgreSQL o SQLite); sin BD, `unirse_clase` responde `error`.
+
+| Cliente → Servidor | Campos | Para qué | Reglas |
+|---|---|---|---|
+| `unirse_clase` | `codigo` | Inscribirse en la clase de un docente | 8 caracteres (se toleran minúsculas y espacios). Responde `clase_unida` y un `perfil` con `clases`. Repetirlo no duplica la inscripción |
+| `elegir_reto` | `reto` (int, 0 = sin reto) | El anfitrión elige el reto antes de iniciar | Solo el host y con la sala esperando. El reto debe ser uno abierto de las clases del host. Todos reciben `sala` con el campo `reto` |
+
+| Servidor → Cliente | Campos | Cuándo |
+|---|---|---|
+| `clase_unida` | `nombre`, `docente` | Respuesta a `unirse_clase` |
+| `perfil` | + `clases`: lista de `{codigo, nombre, docente}` | Siempre (vacía sin clases o sin BD) |
+| `sala` | + `reto` (int, 0 = sin reto) y `retos`: lista de `{id, nombre, jugadores, tiempo_limite_s}` | Siempre. `retos` son los abiertos de las clases del anfitrión; 0 en `tiempo_limite_s` = sin límite |
+| `sala_estado` | + `tiempo_agotado` (bool) | Laberinto. Al vencer el tiempo del reto la partida deja de aceptar acciones (`error`) |
+
+Con reto, `iniciar` siempre arranca el laberinto con la **semilla del reto** (todos los grupos juegan los mismos números) y rechaza grupos con más jugadores que `jugadores_por_grupo`. Se guarda **un intento por jugador** (Wizard incluido) en la tabla `intentos`: completado al terminar el nivel; no completado si se agota el tiempo, si el jugador se va o si la sala se cierra a medias. Cada jugador se guarda una sola vez por partida.

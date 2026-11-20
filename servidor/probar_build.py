@@ -552,9 +552,60 @@ async def escenario_panel(s):
         w.cerrar()
 
 
+async def escenario_reto(s):
+    """Revisión 20/11, rol docente con el juego real: el admin crea un docente; el docente
+    crea una clase y un reto con semilla fija; el build (anfitrión) se une a la clase
+    desde Mi perfil, elige el reto en el Lobby y lo inicia con un bot como Player. Se
+    comprueba que la partida usa la semilla del reto y que se guarda un intento por jugador."""
+    semilla = 4000 + int(s[:3], 16)
+    datos = {"usuario": "admin", "contrasena": clave_admin()}
+    admin = (await asyncio.to_thread(panel, "/login", datos))["token"]
+    profe = f"pr_{s}"
+    await asyncio.to_thread(panel, "/docentes", {"usuario": profe, "nombre": "Profe Prueba",
+                                                 "contrasena": "clave-de-prueba"}, admin)
+    doc = (await asyncio.to_thread(panel, "/login", {"usuario": profe, "contrasena": "clave-de-prueba"}))["token"]
+    clase = await asyncio.to_thread(panel, "/docente/clases", {"nombre": f"Clase {s}"}, doc)
+    reto = await asyncio.to_thread(panel, "/docente/retos", {"clase_id": clase["id"], "semilla": semilla,
+                                                             "tiempo_limite_s": 600}, doc)
+    senal("codigo_clase", clase["codigo"])
+    b = Build("reto", ["conectar", f"registro|rh_{s}|Host{s}|#3FA9F5", "esperar_pantalla|Menu",
+                       "abrir_perfil", "unirse_clase|codigo_clase", "reporte|perfil", "volver",
+                       *A_SALAS, "crear_sala", "esperar_pantalla|Sala", "cambiar_reto", "reporte|lobby",
+                       "esperar_jugadores|2", "esperar|1", "iniciar", "esperar_pantalla|Partida",
+                       "esperar_escena", "reporte|partida", "esperar_senal|fin_reto", "fin"])
+    r = await b.esperar("REPORTE perfil")
+    comprobar(r["clases"] == 1 and f"Clase {s}" in (r["info"] or ""), "Unirse a clase desde Mi perfil con el código", r)
+    r = await b.esperar("REPORTE lobby")
+    comprobar(r["reto"] == reto["id"] and r["retos"] >= 1, "el anfitrión elige el reto en el Lobby", r)
+    bot = await Bot.nuevo(f"rp_{s}", f"RP{s}", "#4FE07A")
+    try:
+        await bot.env(t="unirse_clase", codigo=clase["codigo"])
+        await bot.rec("clase_unida")
+        inicio = await bot.entrar_laberinto(f"Host{s}")
+        r = await b.esperar("REPORTE partida")
+        comprobar(r["escena"] and r["sala_lab"] == 1, "la partida del reto arranca en el laberinto", r)
+        visible = {k: v for k, v in nivel.sortear(random.Random(semilla))[1].items() if k not in ("resp", "produce")}
+        comprobar(inicio["nivel"]["sala"]["datos"] == json.loads(json.dumps(visible)),
+                  "la partida usa la semilla del reto (mismos números)", inicio["nivel"]["sala"]["datos"])
+        await bot.env(t="salir")
+        await bot.rec("fuera")
+        senal("fin_reto")
+        await b.esperar("FIN")
+        for _ in range(40):
+            res = await asyncio.to_thread(panel, f"/docente/retos/{reto['id']}/resultados", None, doc)
+            if len(res["intentos"]) >= 2:
+                break
+            await asyncio.sleep(0.25)
+        quienes = sorted(i["usuario"] for i in res["intentos"])
+        comprobar(quienes == sorted([f"rh_{s}", f"rp_{s}"]), "un intento por jugador en los resultados del docente", quienes)
+        comprobar(not any(i["completado"] for i in res["intentos"]), "abandonar a medias = no completado", res["intentos"])
+    finally:
+        bot.cerrar()
+
+
 ESCENARIOS = {"laberinto": escenario_laberinto, "laberinto_player": escenario_laberinto_player,
               "sesion": escenario_sesion, "reinicio": escenario_reinicio,
-              "panel": escenario_panel}
+              "panel": escenario_panel, "reto": escenario_reto}
 
 
 async def main():
