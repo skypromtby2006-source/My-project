@@ -20,6 +20,8 @@ Cliente -> servidor:
   {"t":"reiniciar"}                    (solo wizard)
   {"t":"unirse_clase","codigo":"ABCD2345"}   (rol docente, revisión 20/11)
   {"t":"elegir_reto","reto":3}         (solo el host; 0 = sin reto)
+  {"t":"login_docente","usuario":"profe","contrasena":"..."}  (espectador)
+  {"t":"espectar","sala_id":"AB12"}    (solo docente: mira sin jugar)
   {"t":"ping"}
 
 Servidor -> cliente:
@@ -113,6 +115,10 @@ class Jugador:
         self.desde = time.time()  # hora de conexión, para el panel
         # Última posición conocida: si se desconecta llevando un objeto, ahí se cae
         self.x = self.y = self.z = 0.0
+        # Docente espectador (revisión 20/11): entra con usuario y contraseña del panel,
+        # no tiene perfil de jugador (usuario queda "") y mira una sala sin estar en ella.
+        self.docente: dict | None = None
+        self.espectando: "Sala | None" = None
 
     @property
     def rol(self) -> str:
@@ -144,6 +150,9 @@ class Sala:
         # Sin reto (None) se juega como siempre.
         self.retos: list[dict] = []
         self.reto: dict | None = None
+        # Docentes mirando: reciben todo lo que se difunde en la sala, pero no están en
+        # `jugadores`: no cuentan para el máximo, no tienen rol ni marcan listo.
+        self.espectadores: dict[str, Jugador] = {}
 
     def info(self) -> dict:
         return {
@@ -159,6 +168,7 @@ class Sala:
             ],
             # 0 = sin reto: JsonUtility de Unity no lee null en un int
             "reto": self.reto["id"] if self.reto else 0,
+            "espectadores": len(self.espectadores),
             "retos": [info_reto(r) for r in self.retos],
         }
 
@@ -610,7 +620,55 @@ async def manejar_perfil(j: Jugador, t: str, m: dict):
 
 # ----------------------------------------------------------------- lógica
 async def difundir(sala: Sala, datos: dict, excepto: Jugador | None = None):
-    await asyncio.gather(*(j.enviar(datos) for j in list(sala.jugadores.values()) if j is not excepto))
+    destinos = [*sala.jugadores.values(), *sala.espectadores.values()]
+    await asyncio.gather(*(j.enviar(datos) for j in destinos if j is not excepto))
+
+
+async def login_docente(j: Jugador, m: dict):
+    """El docente entra al juego con su usuario y contraseña del panel, solo para mirar."""
+    import auth   # hashlib.scrypt; se importa acá para no cargarlo si nadie lo usa
+    if db is None:
+        return await j.enviar({"t": "error", "msg": "El acceso de docentes necesita la base de datos del servidor"})
+    if j.usuario or j.docente:
+        return await j.enviar({"t": "error", "msg": "Ya iniciaste sesión en esta conexión"})
+    usuario = str(m.get("usuario", "")).strip().lower()[:40]
+    doc = await db.buscar_docente(usuario)
+    if doc is None or not auth.verificar_contrasena(str(m.get("contrasena", ""))[:200], doc["hash"]):
+        log.info("Login de docente rechazado en %s (usuario %r)", j.id, usuario)
+        return await j.enviar({"t": "error", "msg": "Usuario o contraseña de docente incorrectos"})
+    if not doc["activo"]:
+        return await j.enviar({"t": "error", "msg": "Cuenta de docente desactivada"})
+    j.docente, j.nombre, j.color = doc, doc["nombre"], "#FFFFFF"
+    log.info("Docente %s entró al juego como espectador (conexión %s)", doc["usuario"], j.id)
+    await registrar("docente_espectador", {"usuario": doc["usuario"], "id": j.id, "ip": j.ip})
+    # Mismo mensaje "perfil" que un jugador, con docente=true: el juego pasa al menú igual
+    await j.enviar({"t": "perfil", "id": j.id, "usuario": doc["usuario"], "nombre": doc["nombre"],
+                    "color": j.color, "docente": True, "clases": [],
+                    "progreso": {"completadas": 0, "mejor_tiempo_s": 0, "errores_totales": 0, "historial": []}})
+
+
+async def dejar_de_espectar(j: Jugador):
+    if j.espectando is not None:
+        j.espectando.espectadores.pop(j.id, None)
+        j.espectando = None
+
+
+async def espectar(j: Jugador, m: dict):
+    codigo = str(m.get("sala_id", "")).strip().upper()
+    sala = salas.get(codigo)
+    if sala is None:
+        return await j.enviar({"t": "error", "msg": f"No existe la sala {codigo}"})
+    await dejar_de_espectar(j)
+    sala.espectadores[j.id] = j
+    j.espectando = sala
+    log.info("Docente %s mira la sala %s", j.docente["usuario"], sala.id)
+    await j.enviar({"t": "espectando", "sala": sala.info()})
+    p = sala.partida
+    if sala.estado == "jugando" and p is not None:
+        # Llega a una partida en curso: el mismo "inicio" que recibieron los jugadores,
+        # con el estado de la sala ACTUAL. Las posiciones llegan con el próximo "pos".
+        puntos = [{"id": x.id, "x": x.x, "y": x.y, "z": x.z} for x in sala.jugadores.values()]
+        await j.enviar({"t": "inicio", "sala": sala.info(), "nivel": p.inicio_info(), "apariciones": puntos})
 
 
 def lista_salas() -> list:
@@ -645,6 +703,10 @@ async def cerrar_sala(sala: Sala, motivo: str, por_admin: bool = False):
     salas.pop(sala.id, None)
     quedan = list(sala.jugadores.values())
     await guardar_intentos(sala, quedan, completado=False)
+    for e in list(sala.espectadores.values()):   # los docentes que miraban vuelven a la lista
+        e.espectando = None
+        quedan.append(e)
+    sala.espectadores.clear()
     sala.jugadores.clear()
     for x in quedan:
         x.sala = None
@@ -723,6 +785,28 @@ async def manejar(j: Jugador, m: dict):
     # Un cliente de la v0.2 o anterior abre con hola y se quedaría esperando un bienvenido que ya no existe
     if t == "hola":
         return await j.enviar({"t": "error", "msg": "Versión del juego desactualizada, descarga la última"})
+
+    if t == "login_docente":
+        return await login_docente(j, m)
+
+    if j.docente is not None:
+        # Un espectador solo mira: lista, entra a mirar, sale y hace ping. Todo lo demás
+        # (pos incluido) se ignora o se rechaza, aunque un cliente modificado lo mande.
+        if t == "listar":
+            return await j.enviar({"t": "salas", "lista": lista_salas()})
+        if t == "espectar":
+            return await espectar(j, m)
+        if t == "salir":
+            await dejar_de_espectar(j)
+            return await j.enviar({"t": "fuera"})
+        if t == "ping":
+            return await j.enviar({"t": "pong"})
+        if t == "pos":
+            return
+        return await j.enviar({"t": "error", "msg": "Los docentes entran como espectadores: no pueden jugar"})
+
+    if t == "espectar":
+        return await j.enviar({"t": "error", "msg": "Solo un docente puede entrar como espectador"})
 
     # Sin identidad no hay a quién asignarle el progreso
     if t in ("listar", "crear_sala", "unirse") and not j.usuario:
@@ -1133,6 +1217,7 @@ async def cliente(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         pass
     finally:
         await salir_de_sala(j)
+        await dejar_de_espectar(j)
         jugadores.pop(j.id, None)
         # Se libera el usuario para que pueda volver a entrar desde otra ventana
         if sesiones.get(j.usuario) is j:
