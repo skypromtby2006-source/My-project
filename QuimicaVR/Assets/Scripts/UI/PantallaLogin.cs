@@ -4,9 +4,9 @@ using UnityEngine.UIElements;
 // Abajo a la izquierda, el estado real de la conexión (SPRINT_UI §3).
 public class PantallaLogin : ControladorPantalla
 {
-    readonly Button tabEntrar, tabCrear, accion;
-    readonly TextField usuario, nombre, ip, puerto;
-    readonly VisualElement soloCrear, tarjeta;
+    readonly Button tabEntrar, tabCrear, tabDocente, accion;
+    readonly TextField usuario, nombre, ip, puerto, contrasena;
+    readonly VisualElement soloCrear, soloDocente, tarjeta;
     readonly Label estado, aviso, ayuda;
     readonly System.Action repintarColor;
 
@@ -14,6 +14,9 @@ public class PantallaLogin : ControladorPantalla
     {
         tabEntrar = Q<Button>("tab-entrar");
         tabCrear = Q<Button>("tab-crear");
+        tabDocente = Q<Button>("tab-docente");
+        contrasena = Q<TextField>("contrasena");
+        soloDocente = Q<VisualElement>("solo-docente");
         accion = Q<Button>("accion");
         usuario = Q<TextField>("usuario");
         nombre = Q<TextField>("nombre");
@@ -27,6 +30,7 @@ public class PantallaLogin : ControladorPantalla
 
         tabEntrar.clicked += () => { menu.CambiarPestana(0); Refrescar(); };
         tabCrear.clicked += () => { menu.CambiarPestana(1); Refrescar(); };
+        tabDocente.clicked += () => { menu.CambiarPestana(2); Refrescar(); };
         accion.clicked += Ejecutar;
         Ui.EnterEjecuta(tarjeta, Ejecutar);
         // El usuario se guarda en minúsculas (regla del servidor): se ve igual que se guardará
@@ -44,6 +48,7 @@ public class PantallaLogin : ControladorPantalla
     {
         menu.FijarServidor(ip.value, puerto.value);
         if (menu.Pestana == 0) menu.Entrar(usuario.value);
+        else if (menu.Pestana == 2) menu.EntrarDocente(usuario.value, contrasena.value);
         else menu.CrearPerfil(usuario.value, nombre.value, menu.ColorPerfil);
         Refrescar();
     }
@@ -59,13 +64,15 @@ public class PantallaLogin : ControladorPantalla
 
     public override void Refrescar()
     {
-        bool crear = menu.Pestana == 1;
-        // La pestaña activa es el botón primario; la otra, secundario (igual que el diseño)
-        tabEntrar.EnableInClassList("sec", crear);
+        bool crear = menu.Pestana == 1, docente = menu.Pestana == 2;
+        // La pestaña activa es el botón primario; las otras, secundario (igual que el diseño)
+        tabEntrar.EnableInClassList("sec", menu.Pestana != 0);
         tabCrear.EnableInClassList("sec", !crear);
+        tabDocente.EnableInClassList("sec", !docente);
         Ui.Mostrar(soloCrear, crear);
+        Ui.Mostrar(soloDocente, docente);
         Ui.Mostrar(ayuda, crear);
-        accion.text = crear ? "Crear cuenta" : "Entrar";
+        accion.text = crear ? "Crear cuenta" : docente ? "Entrar como espectador" : "Entrar";
 
         if (Red.Conectado)
         {

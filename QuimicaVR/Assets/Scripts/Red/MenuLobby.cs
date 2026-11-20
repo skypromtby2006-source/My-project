@@ -95,6 +95,8 @@ public class MenuLobby : MonoBehaviour
             }
             if (m.t == "aviso") { avisoGlobal = m.msg ?? ""; tAvisoGlobal = Time.time; }
             if (m.t == "clase_unida") { aviso = ""; info = $"Te uniste a la clase {m.nombre} ({m.docente})"; }
+            // Docente espectador: entra a la vista de la sala; si ya juegan, el "inicio" llega enseguida
+            if (m.t == "espectando") { pantalla = Pantalla.Sala; aviso = ""; }
             if (m.t == "inicio") { pantalla = Pantalla.Partida; tMensaje = -99; erroresPrevios = 0; }
             if (m.t == "perfil") AlRecibirPerfil(m.perfil);
             if (m.t == "estado")
@@ -169,7 +171,11 @@ public class MenuLobby : MonoBehaviour
     void AlRecibirPerfil(InfoPerfil p)
     {
         aviso = "";
-        if (pantalla == Pantalla.Login)
+        if (pantalla == Pantalla.Login && p.docente)
+        {
+            AbrirSalas();   // el docente no juega: va directo a la lista de salas para mirar
+        }
+        else if (pantalla == Pantalla.Login)
         {
             if (!PruebaAutomatica.Activa) PlayerPrefs.SetString("usuario", p.usuario);
             pantalla = Pantalla.Menu;
@@ -238,6 +244,9 @@ public class MenuLobby : MonoBehaviour
             var abajo = new GUIStyle(Rico()) { alignment = TextAnchor.MiddleCenter };
             GUI.Label(new Rect(0, Screen.height - 60, Screen.width, 40), $"<color=#ffb060>{aviso}</color>", abajo);
         }
+        if (Red.SoyDocente)
+            GUI.Label(new Rect(16, 12, Screen.width - 32, 30),
+                "<b>Espectador</b> · WASD y mouse para moverte · Q/E bajar y subir · Shift rápido · Esc para salir", Rico());
     }
 
     static GUIStyle Rico() => new GUIStyle(GUI.skin.label) { richText = true, wordWrap = true };
@@ -344,6 +353,8 @@ public class MenuLobby : MonoBehaviour
 
     public void VolverAlMenu()
     {
+        // El docente no tiene menú de juego (ni perfil ni progreso): "Volver" cierra su sesión
+        if (Red.SoyDocente) { Desconectar(); return; }
         pantalla = Pantalla.Menu;
         aviso = "";
         sucio = true;
@@ -397,6 +408,18 @@ public class MenuLobby : MonoBehaviour
     public void Iniciar() => Red.IniciarPartida();
 
     // ---------- Rol docente (revisión 20/11) ----------
+    public void EntrarDocente(string usuario, string contrasena)
+    {
+        this.usuario = (usuario ?? "").ToLowerInvariant();
+        sucio = true;
+        if (!UsuarioValido()) return;
+        if (string.IsNullOrEmpty(contrasena)) { aviso = "Escribe la contraseña de docente"; return; }
+        if (AsegurarConexion()) Red.LoginDocente(this.usuario.Trim(), contrasena);
+    }
+
+    // Botón "Mirar" de la lista de salas (solo docente): entra sin jugar
+    public void Espectar(string codigo) => Red.Espectar((codigo ?? "").Trim().ToUpperInvariant());
+
     public void UnirseClase(string codigo)
     {
         // Mismo formato que el servidor: 8 caracteres; espacios y minúsculas se toleran

@@ -32,6 +32,7 @@ using UnityEngine;
     public string usuario, nombre, color;
     public InfoProgreso progreso;
     public List<InfoClase> clases = new List<InfoClase>();
+    public bool docente;           // true = docente espectador (login_docente): solo mira
 }
 
 [Serializable] public class InfoSala
@@ -41,6 +42,7 @@ using UnityEngine;
     public List<InfoJugador> jugadores = new List<InfoJugador>();
     public int reto;               // 0 = sin reto (se juega como siempre)
     public List<InfoReto> retos = new List<InfoReto>();   // los del anfitrión
+    public int espectadores;       // docentes mirando (no cuentan en `cantidad`)
 }
 
 // Misión: los nombres de campo son idénticos a los de server.py (Mision.info)
@@ -164,6 +166,7 @@ public class ClienteRed : MonoBehaviour
     // El rol no se guarda: se lee de la sala cada vez, así la única fuente es el servidor
     public string MiRol => SalaActual?.jugadores.Find(j => j.id == MiId)?.rol ?? "player";
     public bool SoyWizard => MiRol == "wizard";
+    public bool SoyDocente => MiPerfil != null && MiPerfil.docente;
 
     public event Action<Mensaje> AlRecibir;   // cualquier mensaje
     public event Action<string> AlError;      // errores legibles
@@ -241,6 +244,9 @@ public class ClienteRed : MonoBehaviour
     // ---------- Perfil (el servidor responde siempre con "perfil" o "error") ----------
     public void Registrar(string usuario, string nombre, string color) =>
         Enviar("{\"t\":\"registro\",\"usuario\":" + Json(usuario) + ",\"nombre\":" + Json(nombre) + ",\"color\":" + Json(color) + "}");
+    public void LoginDocente(string usuario, string contrasena) =>
+        Enviar("{\"t\":\"login_docente\",\"usuario\":" + Json(usuario) + ",\"contrasena\":" + Json(contrasena) + "}");
+    public void Espectar(string sala) => Enviar("{\"t\":\"espectar\",\"sala_id\":" + Json(sala) + "}");
     public void Login(string usuario) => Enviar("{\"t\":\"login\",\"usuario\":" + Json(usuario) + "}");
     public void EditarPerfil(string nombre, string color) =>
         Enviar("{\"t\":\"perfil_editar\",\"nombre\":" + Json(nombre) + ",\"color\":" + Json(color) + "}");
@@ -302,6 +308,7 @@ public class ClienteRed : MonoBehaviour
                     MiId = m.perfil.id;
                     break;
                 case "sala": SalaActual = m.sala; break;
+                case "espectando": SalaActual = m.sala; break;
                 case "inicio":
                     SalaActual = m.sala; MisionActual = m.mision; NivelActual = m.nivel;
                     SalaEstadoActual = m.nivel != null ? m.nivel.sala : null;

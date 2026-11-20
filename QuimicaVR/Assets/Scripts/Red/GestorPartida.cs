@@ -34,7 +34,9 @@ public class GestorPartida : MonoBehaviour
     public Vector3? PosicionLocal => jugadorLocal != null ? jugadorLocal.transform.position : (Vector3?)null;
     public IEnumerable<string> IdsRemotos => remotos.Keys;
     public Vector3 DestinoRemoto(string id) => remotos[id].destino;
-    public PrimeraPersona JugadorLocal => primeraPersona;   // laberinto: para el empuje de prueba
+    public PrimeraPersona JugadorLocal => primeraPersona;
+    CamaraLibre espectador;                                  // docente: cámara libre, sin cuerpo
+    public bool HayEspectador => espectador != null;   // laberinto: para el empuje de prueba
     public GeneradorNivel Generador => generador;           // laberinto: para las capturas de prueba
 
     class Esfera
@@ -293,6 +295,12 @@ public class GestorPartida : MonoBehaviour
                 remotos[j.id] = new Remoto { go = go, destino = pos, cabeza = go.transform.Find("Cabeza") };
             }
         }
+        if (jugadorLocal == null && ClienteRed.I.SoyDocente)
+        {
+            // Docente espectador: no está en la sala. Mira desde arriba de la entrada del Wizard.
+            espectador = CamaraLibre.Crear(generador.AparicionMundo("wizard") + Vector3.up * 2.5f, escena.transform);
+            jugadorLocal = espectador.gameObject;   // así Update interpola a los remotos
+        }
         if (jugadorLocal == null)
             Debug.LogWarning($"[Quimica] Mi id {ClienteRed.I.MiId} no está en la sala {sala.id}");
         if (nivel.sala != null) generador.AbrirHasta(nivel.sala.sala, nivel.sala.completada_nivel);
@@ -306,7 +314,7 @@ public class GestorPartida : MonoBehaviour
             r.go.transform.rotation = Quaternion.Slerp(r.go.transform.rotation, Quaternion.Euler(0, r.rotY, 0), 12 * Time.deltaTime);
             if (r.cabeza != null) r.cabeza.localRotation = Quaternion.Euler(-r.pitch, 0, 0);
         }
-        var camPP = primeraPersona != null ? primeraPersona.GetComponentInChildren<Camera>() : null;
+        var camPP = jugadorLocal != null ? jugadorLocal.GetComponentInChildren<Camera>() : null;
         if (camPP != null && escena != null)
             foreach (var t in escena.GetComponentsInChildren<TextMesh>())
                 t.transform.rotation = camPP.transform.rotation;
@@ -463,6 +471,7 @@ public class GestorPartida : MonoBehaviour
         if (camaraVieja != null) { camaraVieja.SetActive(true); camaraVieja = null; }
         generador = null;
         primeraPersona = null;
+        espectador = null;
         laberinto = false;
     }
 }

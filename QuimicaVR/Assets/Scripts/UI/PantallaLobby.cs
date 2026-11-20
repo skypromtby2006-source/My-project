@@ -61,6 +61,7 @@ public class PantallaLobby : ControladorPantalla
         else if (faltanListos > 0)
             texto = faltanListos == 1 ? "Falta 1 jugador por marcarse como listo" : $"Faltan {faltanListos} jugadores por marcarse como listos";
         else texto = soyHost ? "Todos listos: ya puedes iniciar la partida" : "Todos listos: el anfitrión puede iniciar";
+        if (Red.SoyDocente) texto = "Estás mirando como docente: la partida empieza cuando el anfitrión la inicie";
         estado.text = texto;
         estado.EnableInClassList("warn", !sePuede);
         estado.EnableInClassList("ok", sePuede);
@@ -72,14 +73,14 @@ public class PantallaLobby : ControladorPantalla
         reto.text = elegido == null ? "Sin reto: partida libre"
             : $"Reto: {elegido.nombre} · grupos de hasta {elegido.jugadores}"
               + (elegido.tiempo_limite_s > 0 ? $" · {elegido.tiempo_limite_s / 60} min" : "");
-        Ui.Mostrar(cambiarReto, soyHost);
+        Ui.Mostrar(cambiarReto, soyHost);   // el docente nunca es host: no lo ve
 
         // El aviso de error (p. ej. el rebote del servidor) no repite el chip de estado
         Ui.Chip(aviso, menu.Aviso);
 
         Ui.Mostrar(iniciar, soyHost);
         iniciar.SetEnabled(sePuede);
-        Ui.Mostrar(listo, !soyHost);
+        Ui.Mostrar(listo, !soyHost && !Red.SoyDocente);
         bool yoListo = s.jugadores.Find(j => j.id == Red.MiId)?.listo ?? false;
         listo.text = yoListo ? "Ya no estoy listo" : "Estoy listo";
         Ui.AplicarGaps(Raiz);

@@ -18,6 +18,7 @@
                 <ui:VisualElement class="row g14">
                     <ui:Button name="tab-entrar" text="Entrar" class="btn sm grow" />
                     <ui:Button name="tab-crear" text="Crear cuenta" class="btn sm sec grow" />
+                    <ui:Button name="tab-docente" text="Docente" class="btn sm sec grow" />
                 </ui:VisualElement>
 
                 <ui:VisualElement>
@@ -26,6 +27,12 @@
                         <ui:Label name="ayuda-usuario" text="4 a 16 caracteres: letras, números y _" class="lbl" />
                     </ui:VisualElement>
                     <ui:TextField name="usuario" max-length="16" class="inp" />
+                </ui:VisualElement>
+
+                <!-- Docente espectador (revisión 20/11): la contraseña del panel web -->
+                <ui:VisualElement name="solo-docente">
+                    <ui:Label text="Contraseña de docente" class="lbl" />
+                    <ui:TextField name="contrasena" max-length="200" password="true" class="inp" />
                 </ui:VisualElement>
 
                 <ui:VisualElement name="solo-crear" class="g14">

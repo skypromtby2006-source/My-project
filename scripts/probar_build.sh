@@ -6,7 +6,7 @@
 #       con semilla fija (puerto 7788, en memoria): no necesitan Docker y conocen las
 #       respuestas de los puzzles. "laberinto" incluye el door-cross físico (una puerta
 #       cerrada bloquea; al abrirse, deja pasar).
-#   sesion, reinicio, panel      -> usan el servidor de Docker (servidor_iniciar.sh).
+#   sesion, reinicio, panel, reto, espectador -> usan el servidor de Docker (servidor_iniciar.sh).
 #       "reinicio" reinicia el servidor con servidor_detener.sh + servidor_iniciar.sh;
 #       "panel" necesita ADMIN_PASSWORD en el .env.
 # Requiere Build/Linux al día (Quimica/3. Build Linux). Se corre con el Python del venv

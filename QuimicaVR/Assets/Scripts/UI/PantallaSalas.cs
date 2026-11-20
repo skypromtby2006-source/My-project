@@ -38,7 +38,11 @@ public class PantallaSalas : ControladorPantalla
         Ui.Placeholder(codigo, "Código de sala (4 caracteres)");
     }
 
-    void UnirseConCodigo() => menu.Unirse(codigo.value);
+    void UnirseConCodigo()
+    {
+        if (Red.SoyDocente) menu.Espectar(codigo.value);
+        else menu.Unirse(codigo.value);
+    }
 
     void Crear()
     {
@@ -58,6 +62,8 @@ public class PantallaSalas : ControladorPantalla
         Ui.LlenarChipPerfil(chipPerfil, Red.MiPerfil);
         Ui.Chip(aviso, menu.Aviso);
         maximo.text = menu.Maximo.ToString();
+        // El docente solo mira: no crea salas (el servidor también lo rechaza)
+        Q<Button>("crear").SetEnabled(!Red.SoyDocente);
 
         var salas = menu.Salas;
         string firma = string.Join("|", salas.Select(s => $"{s.id},{s.nombre},{s.cantidad},{s.maximo},{s.estado}"));
@@ -102,10 +108,13 @@ public class PantallaSalas : ControladorPantalla
         }
 
         string id = s.id;
-        var unirse = new Button(() => menu.Unirse(id)) { text = "Unirse" };
+        bool docente = Red.SoyDocente;
+        var unirse = new Button(() => { if (docente) menu.Espectar(id); else menu.Unirse(id); })
+            { text = docente ? "Mirar" : "Unirse" };
         unirse.AddToClassList("btn");
         unirse.AddToClassList("sm");
-        unirse.SetEnabled(!enPartida && !llena);
+        // Un espectador no ocupa lugar: puede mirar una sala llena o en partida
+        unirse.SetEnabled(docente || (!enPartida && !llena));
         fila.Add(unirse);
         return fila;
     }

@@ -80,6 +80,13 @@ public class PruebaAutomatica : MonoBehaviour
             case "abrir_salas": menu.AbrirSalas(); break;   // botón "Ver salas" del Menú principal
             case "registro": menu.CrearPerfil(Arg(1), Arg(2), Arg(3)); break;
             case "login": menu.Entrar(Arg(1)); break;
+            // --- docente espectador (revisión 20/11) ---
+            case "login_docente": menu.EntrarDocente(Arg(1), Arg(2)); break;
+            case "espectar":
+                var archSala = Path.Combine(senales, Arg(1));
+                yield return Esperar(() => File.Exists(archSala), "señal " + Arg(1));
+                menu.Espectar(File.ReadAllText(archSala).Trim());
+                break;
             case "desconectar": menu.Desconectar(); break;
             case "crear_sala": menu.CrearSala(); break;
             case "unirse_codigo":
@@ -399,6 +406,8 @@ public class PruebaAutomatica : MonoBehaviour
         public bool nivel_completado;      // laberinto: el portón final abierto
         public string info;
         public int clases = -1, reto = -1, retos = -1;   // rol docente
+        public bool docente, camara_libre;                // docente espectador
+        public int espectadores = -1;
     }
 
     EstadoPrueba Estado()
@@ -414,6 +423,8 @@ public class PruebaAutomatica : MonoBehaviour
             nivel_completado = Red.SalaEstadoActual?.completada_nivel ?? false,
             info = menu.Info, clases = Red.MiPerfil?.clases?.Count ?? -1,
             reto = Red.SalaActual?.reto ?? -1, retos = Red.SalaActual?.retos?.Count ?? -1,
+            docente = Red.SoyDocente, camara_libre = gestor.HayEspectador,
+            espectadores = Red.SalaActual?.espectadores ?? -1,
         };
         if (gestor.PosicionLocal is Vector3 p) { e.local = true; e.local_x = p.x; e.local_z = p.z; }
         if (Red.SalaActual != null) e.jugadores_sala = Red.SalaActual.jugadores.Select(j => j.id).ToList();

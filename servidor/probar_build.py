@@ -603,9 +603,58 @@ async def escenario_reto(s):
         bot.cerrar()
 
 
+async def escenario_espectador(s):
+    """Revisión 20/11 (🟡): el docente entra al juego REAL con usuario y contraseña y mira
+    una partida en curso de dos bots, con cámara libre, sin contar como jugador. Ve moverse
+    a los jugadores y al salir vuelve a la lista de salas."""
+    datos = {"usuario": "admin", "contrasena": clave_admin()}
+    admin = (await asyncio.to_thread(panel, "/login", datos))["token"]
+    profe = f"pe_{s}"
+    await asyncio.to_thread(panel, "/docentes", {"usuario": profe, "nombre": "Profe Mira",
+                                                 "contrasena": "clave-de-prueba"}, admin)
+    w = await Bot.nuevo(f"ew_{s}", f"EW{s}", "#3FA9F5")
+    p = await Bot.nuevo(f"ep_{s}", f"EP{s}", "#4FE07A")
+    try:
+        codigo = await w.crear_sala("sala_espectar")
+        await p.env(t="unirse", sala_id=codigo)
+        await p.rec("sala")
+        await p.env(t="listo", valor=True)
+        await w.esperar_sala_lista()
+        await w.env(t="iniciar", modo="laberinto")
+        await w.rec("inicio")
+        await p.rec("inicio")
+        b = Build("espectador", ["conectar", f"login_docente|{profe}|clave-de-prueba", "esperar_pantalla|Salas",
+                                 "reporte|salas", "espectar|sala_espectar", "esperar_pantalla|Partida",
+                                 "esperar_escena", "esperar|1", "reporte|mirando", "esperar_senal|movido",
+                                 "esperar|1", "reporte|movido", "salir", "esperar_pantalla|Salas",
+                                 "reporte|fuera", "fin"])
+        r = await b.esperar("REPORTE salas")
+        comprobar(r["docente"] and r["nombre"] == "Profe Mira", "el docente entra con usuario y contraseña", r)
+        r = await b.esperar("REPORTE mirando")
+        comprobar(r["escena"] and r["camara_libre"] and r["sala"] == codigo,
+                  "entra a la partida en curso como espectador, con cámara libre", r)
+        comprobar(r["mi_id"] not in r["jugadores_sala"] and len(r["jugadores_sala"]) == 2 and r["espectadores"] == 1,
+                  "no cuenta como jugador (2 jugadores + 1 espectador)", r)
+        comprobar(sorted(x["id"] for x in r["remotos"]) == sorted([w.id, p.id]), "ve a los dos jugadores", r["remotos"])
+        await p.env(t="pos", x=3.25, y=1, z=-2.5, ry=90)
+        senal("movido")
+        r = await b.esperar("REPORTE movido")
+        pr = next(x for x in r["remotos"] if x["id"] == p.id)
+        comprobar(abs(pr["x"] - 3.25) < 0.01 and abs(pr["z"] + 2.5) < 0.01, "ve moverse al Player en vivo", pr)
+        r = await b.esperar("REPORTE fuera")
+        comprobar(r["pantalla"] == "Salas" and not r["escena"], "con Esc / salir vuelve a la lista de salas", r)
+        await b.esperar("FIN")
+        await w.env(t="listar")
+        sala = next(x for x in (await w.rec("salas"))["lista"] if x["id"] == codigo)
+        comprobar(sala["cantidad"] == 2 and sala["estado"] == "jugando", "la partida de los jugadores sigue intacta", sala)
+    finally:
+        w.cerrar()
+        p.cerrar()
+
+
 ESCENARIOS = {"laberinto": escenario_laberinto, "laberinto_player": escenario_laberinto_player,
               "sesion": escenario_sesion, "reinicio": escenario_reinicio,
-              "panel": escenario_panel, "reto": escenario_reto}
+              "panel": escenario_panel, "reto": escenario_reto, "espectador": escenario_espectador}
 
 
 async def main():
