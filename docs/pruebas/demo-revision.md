@@ -1,6 +1,6 @@
 # Guion de la demo — Revisión con el docente (20/11/2026)
 
-> Flujo completo del **rol docente**: el admin crea un docente → el docente crea una clase y un reto → dos estudiantes se unen con el código y juegan → el docente ve los resultados y los logs.
+> Flujo completo del **rol docente**: el admin crea un docente → el docente crea una clase y un reto → dos estudiantes se unen con el código y juegan → el docente ve los resultados y los logs. Al final, opcional: el docente mira una partida desde el juego como espectador.
 > Se hace en **una sola PC** con el panel en el navegador y 2 juegos (build de Linux). Dura unos 10 minutos.
 > La parte automática ya está probada: `scripts/probar_build.sh reto` (el juego real) y `servidor/tests` (pytest). Este guion es para **verlo con los ojos y los clics**.
 
@@ -57,6 +57,15 @@ Si alguno de esos usuarios ya existe de una demo anterior, usar otro (por ejempl
 | 18 | **🏫 Mis clases** → **Inscritos** → clic en `beto_ruiz` | La página del estudiante con sus intentos en todos los retos de la clase |
 | 19 | Abrir **📜 Logs** | Solo líneas de **sus** estudiantes (`ana_lopez`, `beto_ruiz`), su conexión o su sala: entrada al juego, unirse a la clase, crear sala, inicio de la partida. Escribir `beto` en **Buscar texto…** filtra |
 | 20 | (Opcional, seguridad) Cerrar sesión y entrar como `admin` → **🎓 Docentes** → **Desactivar** a `profe_ana`. Intentar entrar como `profe_ana` | No deja entrar. Con **Activar** vuelve a entrar |
+
+### Parte 5 (opcional) — El docente mira una partida desde el juego
+| # | Qué hacer | Qué se tiene que ver |
+|---|---|---|
+| 21 | Con Ana y Beto jugando de nuevo (pasos 11 a 14), abrir un **tercer juego**: `Build/Linux/QuimicaDemo.x86_64 &` | Se abre otra ventana del juego en el Login |
+| 22 | **Juego 3:** pestaña **Docente** → usuario `profe_ana`, contraseña `quimica2026` → **Entrar como espectador** | Va directo a la lista de salas. La sala de Ana sale "En partida" y el botón dice **Mirar** |
+| 23 | **Juego 3:** **Mirar** | Entra al laberinto con la cámara libre (arriba dice "Espectador · WASD y mouse…"). Ve moverse a Ana y Beto. Con Q/E sube y baja; atraviesa paredes |
+| 24 | **Juegos 1 y 2:** seguir jugando | Nada cambia para ellos: el docente no aparece, no ocupa lugar en la sala y no puede tocar nada |
+| 25 | **Juego 3:** **Esc** | Vuelve a la lista de salas; la partida de Ana y Beto sigue |
 
 **Si se quiere mostrar un intento completado:** en el paso 16, en vez de salir, terminar el laberinto (abrir el portón final). En Resultados ese intento sale **✔ Sí** con el tiempo total.
 

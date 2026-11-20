@@ -35,3 +35,18 @@ En el Lobby, el anfitrión rota entre "Sin reto" y los retos abiertos de sus cla
 
 ## D11. Escenario nuevo `reto` en probar_build.sh (ahora son 6)
 Usa el servidor de Docker (necesita la BD y el panel, como `panel`). Los 5 de antes no cambiaron.
+
+## D12. Espectador: el docente entra con la pestaña "Docente" del Login, sin menú de juego
+El Login del juego tiene una tercera pestaña, **Docente**, con usuario y la contraseña del panel (`login_docente`, verificada con el mismo scrypt). Después del login va directo a la lista de salas: no tiene Mi perfil ni progreso, y "Volver" cierra su sesión. **Por qué:** es lo más simple y evita que el docente toque pantallas que el servidor le rechaza (perfil, crear sala, unirse a clase).
+
+## D13. El espectador no ocupa lugar ni es jugador; mira cualquier sala, llena o en partida
+El servidor lo guarda en `sala.espectadores`, aparte de `sala.jugadores`: no cuenta para el máximo, no tiene rol, no marca listo y no aparece en la lista de jugadores. Recibe todo lo que se difunde en la sala; su `pos` se ignora (ni siquiera la manda: la cámara libre no envía posición) y cualquier acción de juego se rechaza con "Los docentes entran como espectadores". En la lista de salas el botón dice **Mirar** y está habilitado aunque la sala esté llena o jugando. **Por qué:** así el espectador no puede cambiar en nada la partida que evalúa.
+
+## D14. Al entrar a una partida en curso recibe el mismo "inicio" que los jugadores
+Con el estado de la sala **actual** del laberinto (puertas abiertas hasta ahí). Los jugadores aparecen en su punto de inicio y saltan a su posición real con el próximo `pos` (15 por segundo). **Por qué:** reusar `inicio` evita un mensaje y un camino nuevo en el cliente.
+
+## D15. Cámara libre sin colisiones
+WASD + mouse, Q/E para bajar y subir, Shift rápido, Esc sale (como un jugador). Atraviesa paredes. **Por qué:** para mirar desde arriba o cambiar de lado del laberinto (Wizard ↔ Player) sin quedar trabado; un espectador no tiene cuerpo.
+
+## D16. Escenario nuevo `espectador` en probar_build.sh (ahora son 7)
+Usa el servidor de Docker como `reto`. Dos bots juegan y el build entra como docente: comprueba cámara libre, que no cuenta como jugador, que ve moverse al Player y que al salir vuelve a la lista sin tocar la partida.
