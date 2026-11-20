@@ -3,12 +3,22 @@ using UnityEngine.Rendering.Universal;
 
 // Cámara del docente espectador (revisión 20/11): vuela libre por el laberinto, sin
 // colisiones ni interacción y sin mandar posición (el servidor tampoco la reenviaría).
-// WASD + mouse, Q/E para bajar y subir, Shift para ir rápido. Esc lo maneja MenuLobby
-// (sale de la sala, como un jugador).
-public class CamaraLibre : MonoBehaviour
+// WASD + mouse, Q/E para bajar y subir, Shift para ir rápido. Esc abre la pausa, como
+// a un jugador (desde ahí, "Salir de la sala").
+public class CamaraLibre : MonoBehaviour, IControlPartida
 {
     public float velocidad = 6f, sensibilidad = 2f;
     float pitch, yaw;
+    bool pausa;
+
+    public bool EnPausa => pausa;
+    public float Sensibilidad { get => sensibilidad; set => sensibilidad = value; }
+    public void Pausar(bool p)
+    {
+        pausa = p;
+        Cursor.lockState = p ? CursorLockMode.None : CursorLockMode.Locked;
+        Cursor.visible = p;
+    }
 
     public static CamaraLibre Crear(Vector3 pos, Transform padre)
     {
@@ -28,6 +38,8 @@ public class CamaraLibre : MonoBehaviour
 
     void Update()
     {
+        if (Input.GetKeyDown(KeyCode.Escape)) Pausar(!pausa);
+        if (pausa) return;
         yaw += Input.GetAxis("Mouse X") * sensibilidad;
         pitch = Mathf.Clamp(pitch - Input.GetAxis("Mouse Y") * sensibilidad, -85f, 85f);
         transform.rotation = Quaternion.Euler(pitch, yaw, 0);

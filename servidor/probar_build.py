@@ -487,6 +487,46 @@ async def escenario_laberinto_player(s):
         PUERTO = orig_puerto
 
 
+async def escenario_hud(s):
+    """UI-3: HUD, pausa y avisos con el diseño nuevo. El build es el Player (laberinto con
+    servidor propio, como laberinto_player); captura el HUD y la pausa con el panel de UI
+    Toolkit encima (logs/capturas/hud/) y comprueba que la pausa se abre y que "Salir de
+    la sala" desde ahí vuelve a la lista."""
+    global PUERTO
+    orig_puerto = PUERTO
+    PUERTO = PUERTO_LAB
+    srv = ServidorLocal()
+    try:
+        await srv.arrancar()
+        build = Build("hud", graficos=True, pasos=[
+            "conectar", f"registro|ph_{s}|PHud{s}|#4FE07A", *A_SALAS,
+            "unirse_codigo|codhud", "esperar_pantalla|Sala", "listo", "esperar_pantalla|Partida",
+            "esperar_escena", "esperar|1", "captura_pantalla|hud_player", "reporte|hud",
+            "pausa", "esperar|0.3", "captura_pantalla|hud_pausa", "reporte|pausa",
+            "continuar", "esperar|0.3", "reporte|continua",
+            "pausa", "salir", "esperar_pantalla|Salas", "reporte|fuera", "fin"])
+        wiz = await Bot.nuevo(f"zh_{s}", f"ZH{s}", "#E04FD8")
+        await wiz.crear_sala("codhud")
+        await wiz.esperar_sala_lista()
+        await wiz.env(t="iniciar", modo="laberinto")
+        await wiz.rec("inicio")
+        r = await build.esperar("REPORTE hud")
+        comprobar(r["pantalla"] == "Partida" and r["hud"] and not r["pausa"], "en partida se ve el HUD nuevo, sin pausa", r)
+        r = await build.esperar("REPORTE pausa")
+        comprobar(r["pausa"] and r["hud"], "la pausa se abre sobre el HUD", r)
+        r = await build.esperar("REPORTE continua")
+        comprobar(not r["pausa"] and r["pantalla"] == "Partida", "Continuar vuelve a la partida", r)
+        r = await build.esperar("REPORTE fuera")
+        comprobar(r["pantalla"] == "Salas" and not r["hud"] and not r["escena"], "Salir de la sala desde la pausa vuelve a la lista y oculta el HUD", r)
+        await build.esperar("FIN")
+        for n in ("hud_player", "hud_pausa"):
+            comprobar((CAPTURAS / "hud" / f"{n}.png").exists(), f"captura {n}.png", str(CAPTURAS / "hud"))
+        wiz.cerrar()
+    finally:
+        srv.detener()
+        PUERTO = orig_puerto
+
+
 def panel(ruta, datos=None, token=None):
     """Llama a la API del panel web (solo biblioteca estándar, como el resto del script)."""
     pedido = urllib.request.Request(f"http://{IP}:8000/api{ruta}", method="POST" if datos is not None else "GET",
@@ -654,7 +694,8 @@ async def escenario_espectador(s):
 
 ESCENARIOS = {"laberinto": escenario_laberinto, "laberinto_player": escenario_laberinto_player,
               "sesion": escenario_sesion, "reinicio": escenario_reinicio,
-              "panel": escenario_panel, "reto": escenario_reto, "espectador": escenario_espectador}
+              "panel": escenario_panel, "reto": escenario_reto, "espectador": escenario_espectador,
+              "hud": escenario_hud}
 
 
 async def main():

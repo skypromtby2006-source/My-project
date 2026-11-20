@@ -6,7 +6,7 @@ using UnityEngine.Rendering.Universal;
 // raycast desde el centro con una mira (+) y texto contextual. La entrada va por
 // IInteractor (EntradaTeclado hoy, EntradaXR en la fase de VR). El servidor valida
 // todo: acá solo se mandan intenciones (dial/palanca/montacargas/interactuar).
-public class PrimeraPersona : MonoBehaviour
+public class PrimeraPersona : MonoBehaviour, IControlPartida
 {
     public float velocidad = 4f;
     public float alcance = 3f;
@@ -19,7 +19,6 @@ public class PrimeraPersona : MonoBehaviour
     bool pausa;
     Interactuable apuntado;    // lo que la mira está señalando
     Interactuable editando;    // consola que se está ajustando (greybox: campo de valor)
-    string textoValor = "";
     Vector3 empuje;            // solo pruebas: empuja al jugador sin teclado (ver FijarEmpuje)
 
     // Solo para probar_build.py (PruebaAutomatica): empuja al jugador en una dirección
@@ -70,7 +69,7 @@ public class PrimeraPersona : MonoBehaviour
 
     void Update()
     {
-        if (entrada.Pausa()) { pausa = !pausa; editando = null; BloquearCursor(!pausa); }
+        if (entrada.Pausa()) Pausar(!pausa);
 
         if (!pausa && editando == null)
         {
@@ -126,73 +125,40 @@ public class PrimeraPersona : MonoBehaviour
             case Interactuable.Clase.Consola:
                 if (it.subtipo == "valvula") red.Interactuar(it.id, "abrir");
                 else if (it.subtipo == "lectura") { /* solo se lee en el HUD */ }
-                else { editando = it; textoValor = ""; BloquearCursor(false); }
+                else { editando = it; BloquearCursor(false); }
                 break;
         }
     }
 
-    // ---------------- HUD (greybox, IMGUI) ----------------
-    void OnGUI()
+    // ---------------- Estado para el HUD (UI-3: lo dibuja PantallaHud con UI Toolkit) ----------------
+    public bool EnPausa => pausa;
+    public float Sensibilidad { get => teclado.sensibilidad; set => teclado.sensibilidad = value; }
+    public void Pausar(bool p) { pausa = p; editando = null; BloquearCursor(!p); }
+
+    // Consola de valor abierta (o null) y lo que dice la mira
+    public Interactuable Editando => editando;
+    public string Pista => apuntado == null || editando != null ? ""
+        : apuntado.lado == ClienteRed.I.MiRol ? apuntado.Pista() : $"{apuntado.id} (del otro lado)";
+
+    public void EnviarValor(string texto)
     {
-        // Mira
-        var c = new Vector2(Screen.width / 2f, Screen.height / 2f);
-        GUI.Label(new Rect(c.x - 8, c.y - 12, 20, 24), "+");
-
-        var e = ClienteRed.I != null ? ClienteRed.I.SalaEstadoActual : null;
-        if (e != null)
-        {
-            string txt = $"Sala {e.sala}/5 — {e.nombre}\nConcepto: {e.concepto}\n{e.reaccion}\n{Numeros(e)}";
-            if (!string.IsNullOrEmpty(e.mensaje)) txt += $"\n» {e.mensaje}";
-            var reto = ClienteRed.I.RetoActual;
-            if (reto != null && reto.tiempo_limite_s > 0)
-            {
-                // Reloj del reto: solo informativo, el que corta la partida es el servidor
-                int resta = Mathf.Max(0, Mathf.CeilToInt(reto.tiempo_limite_s - (Time.time - ClienteRed.I.InicioReto)));
-                txt += e.tiempo_agotado ? "\nReto: tiempo agotado" : $"\nReto: quedan {resta / 60}:{resta % 60:00}";
-            }
-            GUI.Box(new Rect(10, 10, 360, 140), txt);
-        }
-
-        if (apuntado != null && editando == null)
-        {
-            string pista = apuntado.lado == ClienteRed.I.MiRol ? apuntado.Pista() : $"{apuntado.id} (del otro lado)";
-            GUI.Label(new Rect(c.x - 120, c.y + 16, 240, 24), pista);
-        }
-
-        if (editando != null)
-        {
-            GUI.Box(new Rect(c.x - 130, c.y - 60, 260, 120), $"Ajustar {editando.id}");
-            GUI.SetNextControlName("valor");
-            textoValor = GUI.TextField(new Rect(c.x - 110, c.y - 20, 220, 26), textoValor);
-            GUI.FocusControl("valor");
-            if (GUI.Button(new Rect(c.x - 110, c.y + 12, 105, 28), "Enviar"))
-            {
-                if (float.TryParse(textoValor, System.Globalization.NumberStyles.Float,
-                                   System.Globalization.CultureInfo.InvariantCulture, out var v))
-                    ClienteRed.I.Dial(editando.id, v);
-                editando = null; BloquearCursor(true);
-            }
-            if (GUI.Button(new Rect(c.x + 5, c.y + 12, 105, 28), "Cancelar")) { editando = null; BloquearCursor(true); }
-        }
-
-        if (pausa)
-        {
-            GUI.Box(new Rect(c.x - 120, c.y - 70, 240, 140), "Pausa");
-            GUI.Label(new Rect(c.x - 100, c.y - 40, 200, 20), $"Sensibilidad: {teclado.sensibilidad:0.0}");
-            teclado.sensibilidad = GUI.HorizontalSlider(new Rect(c.x - 100, c.y - 18, 200, 20), teclado.sensibilidad, .5f, 6f);
-            if (GUI.Button(new Rect(c.x - 100, c.y + 10, 200, 30), "Reanudar")) { pausa = false; BloquearCursor(true); }
-        }
+        if (editando != null && float.TryParse(texto, System.Globalization.NumberStyles.Float,
+                                               System.Globalization.CultureInfo.InvariantCulture, out var v))
+            ClienteRed.I.Dial(editando.id, v);
+        CancelarEdicion();
     }
 
+    public void CancelarEdicion() { editando = null; BloquearCursor(!pausa); }
+
     // Números visibles de la sala según el concepto (lo que cada lado necesita leer).
-    static string Numeros(InfoSalaEstado e)
+    public static string Numeros(InfoSalaEstado e)
     {
         var d = e.datos;
         if (d == null) return "";
         switch (e.concepto)
         {
             case "balanceo":
-                string coef = d.coeficientes != null ? $"{d.coeficientes.H2}H2+{d.coeficientes.O2}O2->{d.coeficientes.H2O}H2O" : "";
+                string coef = d.coeficientes != null ? $"{d.coeficientes.H2}H2 + {d.coeficientes.O2}O2 → {d.coeficientes.H2O}H2O" : "";
                 return $"La puerta pide {d.pide_h2o_mol} mol de H2O   [{coef}]";
             case "mol": return $"Llegó {d.agua_mol} mol de agua";
             case "masa": return $"NaOH: {d.naoh_mol} mol   ·   HCl: {d.hcl_g} g";

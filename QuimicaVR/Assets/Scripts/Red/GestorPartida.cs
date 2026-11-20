@@ -36,7 +36,9 @@ public class GestorPartida : MonoBehaviour
     public Vector3 DestinoRemoto(string id) => remotos[id].destino;
     public PrimeraPersona JugadorLocal => primeraPersona;
     CamaraLibre espectador;                                  // docente: cámara libre, sin cuerpo
-    public bool HayEspectador => espectador != null;   // laberinto: para el empuje de prueba
+    public bool HayEspectador => espectador != null;
+    // El que controla la cámara: el jugador en primera persona o la cámara del docente (para el HUD)
+    public IControlPartida Control => primeraPersona != null ? primeraPersona : espectador != null ? espectador : (IControlPartida)null;   // laberinto: para el empuje de prueba
     public GeneradorNivel Generador => generador;           // laberinto: para las capturas de prueba
 
     class Esfera
@@ -473,5 +475,8 @@ public class GestorPartida : MonoBehaviour
         primeraPersona = null;
         espectador = null;
         laberinto = false;
+        // Se sale de la partida (pausa → Salir de la sala, fin, cierre): el menú necesita el mouse
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
     }
 }

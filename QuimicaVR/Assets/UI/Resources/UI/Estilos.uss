@@ -262,3 +262,64 @@
 .fila-historial > .col-dato { width: 130px; -unity-text-align: middle-right; }
 .raiz .inp .unity-base-text-field__input--placeholder .unity-text-element,
 .raiz .inp > .unity-base-text-field__input--placeholder { color: #6f64a0; }
+
+/* ---------- HUD en partida, pausa y consola (UI-3) ----------
+   Tarjeta translúcida con los mismos tokens; ocupa como máximo ~25% de la pantalla. */
+.hud { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+.hud-card {
+    position: absolute;
+    left: 20px;
+    top: 20px;
+    max-width: 400px;
+    padding: 14px 18px;
+    background-color: rgba(26, 20, 51, 0.82);
+    border-width: 1px;
+    border-color: rgba(74, 58, 138, 0.9);
+    border-radius: 16px;
+}
+.hud-titulo { font-size: 20px; margin: 0; padding: 0; white-space: normal; }
+.hud-titulo-lg { font-size: 30px; margin: 0; padding: 0; }
+.hud-chips { flex-wrap: wrap; }
+.hud-texto { font-size: 16px; color: var(--texto-2); white-space: normal; margin: 0; padding: 0; }
+.hud-dato { font-size: 17px; white-space: normal; margin: 0; padding: 0; }
+.hud-mensaje-sala { font-size: 16px; color: #5eead4; white-space: normal; margin: 0; padding: 0; }
+.hud-mira {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 24px;
+    height: 24px;
+    margin-left: -12px;
+    margin-top: -12px;
+    padding: 0;
+    font-size: 24px;
+    -unity-text-align: middle-center;
+    color: rgba(243, 239, 255, 0.9);
+}
+/* Filas centradas a lo ancho: el chip de adentro queda en el medio */
+.hud-fila { position: absolute; left: 0; right: 0; align-items: center; }
+.hud-fila > .chip { align-self: center; }
+.hud-fila-pista { top: 53%; }
+.hud-fila-mensaje { top: 20%; }
+.hud-fila-aviso { bottom: 36px; }
+.hud-mensaje {
+    font-size: 28px;
+    max-width: 900px;
+    padding: 12px 26px;
+    border-radius: 16px;
+    background-color: rgba(26, 20, 51, 0.82);
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+.hud-ayuda { position: absolute; left: 20px; bottom: 20px; }
+.hud-modal {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(14, 10, 31, 0.6);
+}
+.hud-dialogo { width: 420px; }
+.raiz .hud-slider { margin: 0; }
+.raiz .hud-slider .unity-base-slider__tracker { background-color: var(--secundario); border-color: var(--secundario-borde); border-radius: 4px; }
+.raiz .hud-slider .unity-base-slider__dragger { background-color: var(--acento); border-color: var(--marca); border-radius: 8px; }

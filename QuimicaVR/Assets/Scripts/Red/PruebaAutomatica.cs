@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.UIElements;
 
 // Modo de prueba del build real (lo usa servidor/probar_build.py). Solo se activa con
 // el argumento -prueba "<pasos>", así que un jugador normal nunca lo ve.
@@ -136,6 +137,10 @@ public class PruebaAutomatica : MonoBehaviour
             case "montacargas": Red.Montacargas(Arg(1)); break;
             case "colocar": Colocar(Arg(1), Arg(2), Arg(3)); break;
             case "capturas": yield return Capturas(); break;
+            // --- UI-3: captura con el HUD encima y la pausa ---
+            case "captura_pantalla": yield return CapturaPantalla(Arg(1)); break;
+            case "pausa": gestor.Control?.Pausar(true); break;
+            case "continuar": gestor.Control?.Pausar(false); break;
             case "medir_fps": yield return MedirFps(float.Parse(Arg(1), System.Globalization.CultureInfo.InvariantCulture)); break;
             case "empujar": yield return Empujar(Arg(1), Arg(2), Arg(3)); break;
             case "esperar_escena": yield return Esperar(() => gestor.HayEscena, "la escena del laberinto"); break;
@@ -277,6 +282,65 @@ public class PruebaAutomatica : MonoBehaviour
         Log("REPORTE capturas " + JsonUtility.ToJson(lista));
     }
 
+    // ---------- UI-3: lo que ve el jugador, HUD incluido ----------
+    // Las capturas de las salas renderizan solo la cámara. Esta hace dos pasadas: la cámara
+    // a una textura y el panel de UI Toolkit a otra con fondo transparente, y las compone
+    // (el panel limpia su textura de destino, así que no pueden compartir una).
+    IEnumerator CapturaPantalla(string nombre)
+    {
+        if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null) { Fallar("captura sin GPU"); yield break; }
+        var control = gestor != null ? gestor.Control as Component : null;
+        var cam = control != null ? control.GetComponentInChildren<Camera>() : Camera.main;
+        var panel = Resources.Load<PanelSettings>("UI/PanelUI");
+        if (cam == null || panel == null) { Fallar("no hay cámara o PanelUI para la captura"); yield break; }
+        int w = AnchoCaptura, h = AltoCaptura;
+        var rtJuego = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB) { antiAliasing = 1 };
+        var rtUi = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB) { antiAliasing = 1 };
+        var juego = new Texture2D(w, h, TextureFormat.RGBA32, false);
+        var ui = new Texture2D(w, h, TextureFormat.RGBA32, false);
+
+        yield return new WaitForEndOfFrame();
+        cam.targetTexture = rtJuego;
+        cam.Render();
+        cam.targetTexture = null;
+        Leer(rtJuego, juego);
+
+        var antes = panel.targetTexture; bool borrar = panel.clearColor; var colorAntes = panel.colorClearValue;
+        panel.targetTexture = rtUi; panel.clearColor = true; panel.colorClearValue = Color.clear;
+        yield return null;
+        yield return null;
+        yield return new WaitForEndOfFrame();
+        Leer(rtUi, ui);
+        panel.targetTexture = antes; panel.clearColor = borrar; panel.colorClearValue = colorAntes;
+
+        // El panel escribe color premultiplicado sobre transparente: final = ui + juego·(1 − α)
+        var a = juego.GetPixels32(); var b = ui.GetPixels32();
+        for (int k = 0; k < a.Length; k++)
+        {
+            int inv = 255 - b[k].a;
+            a[k] = new Color32((byte)Mathf.Min(255, b[k].r + a[k].r * inv / 255), (byte)Mathf.Min(255, b[k].g + a[k].g * inv / 255),
+                               (byte)Mathf.Min(255, b[k].b + a[k].b * inv / 255), 255);
+        }
+        juego.SetPixels32(a);
+        juego.Apply();
+
+        string dir = Argumento("-capturas") ?? Path.Combine(senales, "capturas");
+        Directory.CreateDirectory(dir);
+        var archivo = Path.GetFullPath(Path.Combine(dir, nombre + ".png"));
+        File.WriteAllBytes(archivo, juego.EncodeToPNG());
+        rtJuego.Release(); rtUi.Release();
+        Destroy(rtJuego); Destroy(rtUi); Destroy(juego); Destroy(ui);
+        Log("MARCA captura " + archivo);
+    }
+
+    static void Leer(RenderTexture rt, Texture2D tex)
+    {
+        RenderTexture.active = rt;
+        tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+        tex.Apply();
+        RenderTexture.active = null;
+    }
+
     // ---------- Rendimiento (criterio S4-4: ≥ 60 FPS) ----------
     // Renderiza la cámara del jugador a 1920×1080 cada frame, sin tope de FPS ni vsync,
     // y lee 1 píxel para esperar a que la GPU termine: así el número incluye el trabajo
@@ -407,6 +471,7 @@ public class PruebaAutomatica : MonoBehaviour
         public string info;
         public int clases = -1, reto = -1, retos = -1;   // rol docente
         public bool docente, camara_libre;                // docente espectador
+        public bool pausa, hud;                           // UI-3
         public int espectadores = -1;
     }
 
@@ -424,6 +489,7 @@ public class PruebaAutomatica : MonoBehaviour
             info = menu.Info, clases = Red.MiPerfil?.clases?.Count ?? -1,
             reto = Red.SalaActual?.reto ?? -1, retos = Red.SalaActual?.retos?.Count ?? -1,
             docente = Red.SoyDocente, camara_libre = gestor.HayEspectador,
+            pausa = gestor.Control != null && gestor.Control.EnPausa, hud = menu.HudVisible,
             espectadores = Red.SalaActual?.espectadores ?? -1,
         };
         if (gestor.PosicionLocal is Vector3 p) { e.local = true; e.local_x = p.x; e.local_z = p.z; }

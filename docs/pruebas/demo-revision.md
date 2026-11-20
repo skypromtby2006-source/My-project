@@ -46,9 +46,9 @@ Si alguno de esos usuarios ya existe de una demo anterior, usar otro (por ejempl
 | 11 | **Juego 1:** volver al menú → **Ver salas** → **Crear sala** | Se abre la sala; Ana es 🧙 Wizard (anfitriona). Abajo dice **"Sin reto: partida libre"** |
 | 12 | **Juego 1:** clic en **Cambiar reto** | Cambia a **"Reto: Química 3°A · reto N · grupos de hasta 2"** |
 | 13 | **Juego 2:** **Ver salas** → unirse a la sala de Ana → **Estoy listo** | Beto aparece como 🧑‍🔬 Player y listo en las dos ventanas |
-| 14 | **Juego 1:** **Iniciar partida** | Las dos ventanas entran al laberinto. En el HUD se ve el **reloj del reto** contando hacia atrás desde 10:00 |
+| 14 | **Juego 1:** **Iniciar partida** | Las dos ventanas entran al laberinto. En el HUD (tarjeta arriba a la izquierda) se ve la sala, el rol y el chip **Reto: 10:00** contando hacia atrás |
 | 15 | **Panel (docente):** abrir **🧪 Partidas en vivo** | Aparece la sala con Ana y Beto, el tiempo y los errores, actualizándose sola cada pocos segundos |
-| 16 | Jugar 1–2 minutos (mover a Beto, interactuar con algo de la primera sala). Después, salir de la partida con **Esc**: primero Beto (Juego 2), después Ana (Juego 1) | Los dos vuelven a la lista de salas |
+| 16 | Jugar 1–2 minutos (mover a Beto, interactuar con algo de la primera sala). Después, salir: **Esc** abre la **Pausa** → **Salir de la sala**. Primero Beto (Juego 2), después Ana (Juego 1) | La pausa tiene el estilo del menú (Continuar, Sensibilidad del mouse, Salir de la sala). Los dos vuelven a la lista de salas |
 
 ### Parte 4 — El docente ve los resultados y los logs
 | # | Qué hacer | Qué se tiene que ver |
@@ -63,9 +63,9 @@ Si alguno de esos usuarios ya existe de una demo anterior, usar otro (por ejempl
 |---|---|---|
 | 21 | Con Ana y Beto jugando de nuevo (pasos 11 a 14), abrir un **tercer juego**: `Build/Linux/QuimicaDemo.x86_64 &` | Se abre otra ventana del juego en el Login |
 | 22 | **Juego 3:** pestaña **Docente** → usuario `profe_ana`, contraseña `quimica2026` → **Entrar como espectador** | Va directo a la lista de salas. La sala de Ana sale "En partida" y el botón dice **Mirar** |
-| 23 | **Juego 3:** **Mirar** | Entra al laberinto con la cámara libre (arriba dice "Espectador · WASD y mouse…"). Ve moverse a Ana y Beto. Con Q/E sube y baja; atraviesa paredes |
+| 23 | **Juego 3:** **Mirar** | Entra al laberinto con la cámara libre (abajo a la izquierda dice "Espectador · WASD y mouse…"). Ve moverse a Ana y Beto. Con Q/E sube y baja; atraviesa paredes |
 | 24 | **Juegos 1 y 2:** seguir jugando | Nada cambia para ellos: el docente no aparece, no ocupa lugar en la sala y no puede tocar nada |
-| 25 | **Juego 3:** **Esc** | Vuelve a la lista de salas; la partida de Ana y Beto sigue |
+| 25 | **Juego 3:** **Esc** → **Salir de la sala** | Vuelve a la lista de salas; la partida de Ana y Beto sigue |
 
 **Si se quiere mostrar un intento completado:** en el paso 16, en vez de salir, terminar el laberinto (abrir el portón final). En Resultados ese intento sale **✔ Sí** con el tiempo total.
 

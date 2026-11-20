@@ -46,6 +46,7 @@ public class MenuLobby : MonoBehaviour
     // ---------- Vista (UI Toolkit) ----------
     readonly Dictionary<Pantalla, ControladorPantalla> vistas = new Dictionary<Pantalla, ControladorPantalla>();
     Label banner;
+    PantallaHud hud;
     Pantalla? pantallaDibujada;
     bool sucio = true;          // algo cambió: refrescar la pantalla visible en el próximo Update
     float proximoRepintado;
@@ -146,6 +147,8 @@ public class MenuLobby : MonoBehaviour
         vistas[Pantalla.Salas] = new PantallaSalas(this, Cargar(raiz, "Salas"));
         vistas[Pantalla.Sala] = new PantallaLobby(this, Cargar(raiz, "Lobby"));
         vistas[Pantalla.Perfil] = new PantallaPerfil(this, Cargar(raiz, "Perfil"));
+        // El HUD no es una pantalla del menú: se ve encima del juego mientras se juega
+        hud = new PantallaHud(this, Cargar(raiz, "Hud"));
 
         // El banner va al final para quedar encima de cualquier pantalla
         var franja = new VisualElement { pickingMode = PickingMode.Ignore };
@@ -189,7 +192,13 @@ public class MenuLobby : MonoBehaviour
 
     void Update()
     {
-        if (pantalla == Pantalla.Partida && Input.GetKeyDown(KeyCode.Escape)) SalirDeSala();
+        // Esc abre la pausa del laberinto (PrimeraPersona / CamaraLibre); desde ahí se sale.
+        // Solo en la misión vieja, sin control de cámara, Esc sigue saliendo de la sala.
+        if (pantalla == Pantalla.Partida && Input.GetKeyDown(KeyCode.Escape))
+        {
+            var g = FindFirstObjectByType<GestorPartida>();
+            if (g == null || g.Control == null) SalirDeSala();
+        }
         if (pantalla == Pantalla.Salas && Time.time > proximoRefresco)
         {
             proximoRefresco = Time.time + 2f;   // refresco automático de la lista
@@ -216,46 +225,31 @@ public class MenuLobby : MonoBehaviour
             proximoRepintado = Time.time + 0.5f;
             if (vistas.TryGetValue(pantalla, out var v)) v.Refrescar();
         }
+        bool jugando = pantalla == Pantalla.Partida;
+        Ui.Mostrar(hud.Raiz, jugando);
+        if (jugando) hud.Refrescar();   // cada cuadro: reloj del reto, mira y pista
         string global = AvisoGlobal;
         banner.text = global == "" ? "" : "AVISO: " + global;
         Ui.Mostrar(banner, global != "");
     }
 
-    // ---------- HUD en IMGUI: pasa a UI Toolkit en la UI-3 ----------
-    void OnGUI()
-    {
-        if (pantalla != Pantalla.Partida) return;
-        var fuente = GestorPartida.FuenteBase();   // la misma de los textos 3D: tiene "_" y "₂"
-        if (fuente != null) GUI.skin.font = fuente;
-        GUI.skin.label.fontSize = 18;
-        Hud();
-    }
-
-    void Hud()
-    {
-        var estado = Red.EstadoActual;
-        if (estado != null && !string.IsNullOrEmpty(estado.mensaje) && (estado.completada || Time.time - tMensaje < 3f))
-        {
-            var centro = new GUIStyle(Rico()) { alignment = TextAnchor.MiddleCenter };
-            GUI.Label(new Rect(0, Screen.height * .2f, Screen.width, 120), $"<b><size=28>{estado.mensaje}</size></b>", centro);
-        }
-        if (!string.IsNullOrEmpty(aviso) && Time.time - tAviso < 3f)
-        {
-            var abajo = new GUIStyle(Rico()) { alignment = TextAnchor.MiddleCenter };
-            GUI.Label(new Rect(0, Screen.height - 60, Screen.width, 40), $"<color=#ffb060>{aviso}</color>", abajo);
-        }
-        if (Red.SoyDocente)
-            GUI.Label(new Rect(16, 12, Screen.width - 32, 30),
-                "<b>Espectador</b> · WASD y mouse para moverte · Q/E bajar y subir · Shift rápido · Esc para salir", Rico());
-    }
-
-    static GUIStyle Rico() => new GUIStyle(GUI.skin.label) { richText = true, wordWrap = true };
-
     // ---------- Estado que leen las pantallas ----------
     public string PantallaActual => pantalla.ToString();
+    public bool HudVisible => hud != null && hud.Raiz.style.display != DisplayStyle.None;
     public string Aviso => aviso;
     public string Info => info;
     public string ErrorConexion => errorConexion;
+    // HUD de la partida (PantallaHud): el aviso de abajo y el mensaje central duran 3 s
+    public string AvisoPartida => Time.time - tAviso < 3f ? aviso : "";
+    public string MensajeCentral
+    {
+        get
+        {
+            var estado = Red.EstadoActual;
+            if (estado == null || string.IsNullOrEmpty(estado.mensaje)) return "";
+            return estado.completada || Time.time - tMensaje < 3f ? estado.mensaje : "";
+        }
+    }
     public string AvisoGlobal => Time.time - tAvisoGlobal < DuracionAvisoGlobal ? avisoGlobal : "";
     public string Ip => ip;
     public string Puerto => puerto;

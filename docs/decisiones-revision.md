@@ -50,3 +50,6 @@ WASD + mouse, Q/E para bajar y subir, Shift rápido, Esc sale (como un jugador).
 
 ## D16. Escenario nuevo `espectador` en probar_build.sh (ahora son 7)
 Usa el servidor de Docker como `reto`. Dos bots juegan y el build entra como docente: comprueba cámara libre, que no cuenta como jugador, que ve moverse al Player y que al salir vuelve a la lista sin tocar la partida.
+
+## D17. UI-3: Esc abre la pausa (antes sacaba de la sala al instante)
+El HUD, la pausa y la consola de valor pasan a UI Toolkit (`Hud.uxml` + `PantallaHud`) con los tokens del diseño, y se borra todo el IMGUI de `MenuLobby` y `PrimeraPersona` (queda solo el contador de FPS de F3, que es de depuración). Antes, Esc en partida llamaba a `SalirDeSala` y a la vez abría la pausa IMGUI, que nunca llegaba a verse. Ahora Esc abre la **Pausa** (Continuar · Sensibilidad del mouse · Salir de la sala), como pide SPRINT_UI §3; el espectador tiene la misma. **Por qué:** salir con una tecla que se aprieta sin querer echaba al jugador de la partida. Escenario nuevo `hud` (son 8): captura el HUD y la pausa con el panel de UI Toolkit encima (`docs/capturas/ui3/`).

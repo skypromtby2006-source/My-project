@@ -59,3 +59,12 @@ public class Interactuable : MonoBehaviour
         }
     }
 }
+
+// Lo que el HUD (PantallaHud) necesita del que controla la cámara en partida: el jugador
+// en primera persona o la cámara libre del docente espectador. Esc abre y cierra la pausa.
+public interface IControlPartida
+{
+    bool EnPausa { get; }
+    void Pausar(bool pausa);
+    float Sensibilidad { get; set; }
+}
