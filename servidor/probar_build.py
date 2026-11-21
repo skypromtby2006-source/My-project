@@ -27,6 +27,8 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
+import urllib.error
 import urllib.request
 import uuid
 
@@ -528,7 +530,20 @@ async def escenario_hud(s):
 
 
 def panel(ruta, datos=None, token=None):
-    """Llama a la API del panel web (solo biblioteca estándar, como el resto del script)."""
+    """Llama a la API del panel web (solo biblioteca estándar, como el resto del script).
+    El panel acepta 5 logins por minuto por IP: con todos los escenarios seguidos se
+    puede pasar, así que un 429 en /login espera a que se libere y reintenta."""
+    for intento in range(3):
+        try:
+            return _panel(ruta, datos, token)
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or ruta != "/login" or intento == 2:
+                raise
+            print("  (límite de logins del panel: espero 30 s)")
+            time.sleep(30)
+
+
+def _panel(ruta, datos=None, token=None):
     pedido = urllib.request.Request(f"http://{IP}:8000/api{ruta}", method="POST" if datos is not None else "GET",
                                     data=json.dumps(datos).encode() if datos is not None else None,
                                     headers={"Content-Type": "application/json",
