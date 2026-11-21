@@ -1,6 +1,7 @@
 ## Reporte — Presentación v0.6-demo (build de Windows, pruebas y kit)
 
 Brief: `MDs/PRESENTACION.md`. Fecha de la presentación: **sin completar** (el brief y el pedido traían el campo vacío).
+Nota del proceso: dos veces entró por error al commit un cambio local de `docs/pruebas/s3-integral.md` que no era parte de esto. Se revirtió antes del merge y quedó como estaba, sin commitear.
 
 ### Versión y rama
 - Última versión: `v0.6-rc1` (candidata del 20/11; `v0.6-demo` nunca se había cortado). Esta es **`v0.6-demo`**.
@@ -27,7 +28,7 @@ Brief: `MDs/PRESENTACION.md`. Fecha de la presentación: **sin completar** (el b
 - **`probar_paquete.sh`**:
   - Docker en Arch, desde el zip: PostgreSQL, `probar_cliente` (modo agua + una partida del laberinto), panel, y `demo.py` sembrar ×2 sin duplicar (6 intentos) y limpiar → `PAQUETE OK ✔`.
   - `.exe` en GitHub Actions (windows-latest), run 44878438780 sobre la rama: además de lo de siempre, `--sembrar-demo` ×2 (1 docente, 1 clase, 6 intentos, 4 estudiantes; misma contraseña) y `--limpiar-demo` (borra solo la demo) → `PAQUETE OK ✔`.
-  - Con el tag: RESULTADO_RELEASE.
+  - Con el tag `v0.6-demo`: el run 44879053603 de Actions construyó y probó el `.exe` en Windows (con los datos de demo) y creó el Release. `publicar_release.sh v0.6-demo` empaquetó con ese `.exe`, probó el paquete Docker desde el zip (`PAQUETE OK ✔`, con los datos de demo) y subió `QuimicaDemo_Windows_v0.6-demo.zip`. El Release tiene los dos zips: https://github.com/skypromtby2006-source/My-project/releases/tag/v0.6-demo
 - Capturas revisadas a ojo: la tabla de resultados del docente muestra los 6 intentos con errores por concepto; el lobby muestra *Reto: Química 5to A*.
 
 ### Partes del guion ajustadas (y por qué)
@@ -50,10 +51,9 @@ Brief: `MDs/PRESENTACION.md`. Fecha de la presentación: **sin completar** (el b
 - La **prueba manual en Windows** (`docs/pruebas/windows-v0.6-demo.md`) no se hizo: la hace Jona el día anterior. En particular, la consola de `sembrar_demo.bat` en un Windows real (la salida con tildes está probada en Actions solo redirigida a un archivo).
 - Completar la fecha y hora de la presentación en el tutorial.
 - Verificar las dos cifras externas del guion.
-- La subida del zip completo al Release (`gh release upload`) la bloqueó el clasificador de permisos en la v0.6-rc1. Si vuelve a pasar, el comando está más abajo.
 
 ### Necesito de Jona
 1. Correr el checklist de Windows y devolver las filas con ❌.
 2. Completar la fecha en `tutorial.md` y confirmar Labster y SITEAL.
 
-Commit: COMMIT_FINAL · Tag: `v0.6-demo`
+Merge a `main`: 57a56c6 (tag `v0.6-demo`). Este reporte se completó después del tag (solo docs).
