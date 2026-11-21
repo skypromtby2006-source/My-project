@@ -43,6 +43,20 @@ PASO 2 — Abrir el juego
      Jugador A: "Iniciar partida".
 
 
+Datos de demo (para presentar)
+------------------------------
+  Doble clic en  Servidor\sembrar_demo.bat  (con el servidor abierto o cerrado).
+  Carga una clase de ejemplo para que el panel no se vea vacío:
+    - docente  docente_demo  (la contraseña se genera y se muestra)
+    - clase "Química 5to A" con su código de 8 letras
+    - un reto del laberinto con semilla fija
+    - 4 estudiantes (ana_demo, beto_demo, carla_demo, dani_demo) que ya jugaron
+  Todo queda anotado en  Servidor\demo_credenciales.txt  (también la
+  contraseña del admin). Se puede correr dos veces: no duplica nada.
+  Para borrar solo esos datos:  Servidor\limpiar_demo.bat
+  Con Docker:  ServidorDedicado\sembrar_demo_docker.bat
+
+
 Cómo se juega
 -------------
   Controles: WASD = moverse · mouse = mirar · E = interactuar (apunta con la

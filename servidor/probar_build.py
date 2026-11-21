@@ -692,10 +692,57 @@ async def escenario_espectador(s):
         p.cerrar()
 
 
+async def escenario_menus(s):
+    """Presentación: una captura de cada pantalla del menú con el juego real (Login, Menú,
+    Mi perfil con una clase, lista de salas y Lobby con el reto elegido y 2 jugadores),
+    en logs/capturas/menus/. Es material de respaldo por si algo falla en vivo. Usa el
+    servidor de Docker, como "reto", porque las clases necesitan la BD."""
+    datos = {"usuario": "admin", "contrasena": clave_admin()}
+    admin = (await asyncio.to_thread(panel, "/login", datos))["token"]
+    profe = f"pm_{s}"
+    await asyncio.to_thread(panel, "/docentes", {"usuario": profe, "nombre": "Profe Demo",
+                                                 "contrasena": "clave-de-prueba"}, admin)
+    doc = (await asyncio.to_thread(panel, "/login", {"usuario": profe, "contrasena": "clave-de-prueba"}))["token"]
+    clase = await asyncio.to_thread(panel, "/docente/clases", {"nombre": "Química 5to A"}, doc)
+    await asyncio.to_thread(panel, "/docente/retos", {"clase_id": clase["id"], "semilla": 20261121}, doc)
+    senal("codigo_clase", clase["codigo"])
+    nombres = ["login", "menu", "perfil", "salas", "sala_reto", "sala_dos"]
+    b = Build("menus", graficos=True, pasos=[
+        "conectar", "esperar_pantalla|Login", "esperar|0.5", "captura_pantalla|login",
+        f"registro|ma_{s}|Ana|#3FA9F5", "esperar_pantalla|Menu", "esperar|0.5", "captura_pantalla|menu",
+        "abrir_perfil", "unirse_clase|codigo_clase", "esperar|0.5", "captura_pantalla|perfil", "volver",
+        *A_SALAS, "esperar|0.5", "captura_pantalla|salas",
+        "crear_sala", "esperar_pantalla|Sala", "cambiar_reto", "esperar|0.5", "captura_pantalla|sala_reto",
+        "esperar_jugadores|2", "esperar|1", "captura_pantalla|sala_dos", "reporte|lobby", "fin"])
+    bot = await Bot.nuevo(f"mb_{s}", "Beto", "#F5D33F")
+    try:
+        await bot.env(t="unirse_clase", codigo=clase["codigo"])
+        await bot.rec("clase_unida")
+        sala = None
+        for _ in range(120):   # la sala del build aparece cuando llega a crear_sala
+            await bot.env(t="listar")
+            sala = next((x for x in (await bot.rec("salas"))["lista"]
+                         if any(j["nombre"] == "Ana" for j in x["jugadores"])), None)
+            if sala:
+                break
+            await asyncio.sleep(0.25)
+        comprobar(sala is not None, "la sala del build aparece en la lista", None)
+        await bot.env(t="unirse", sala_id=sala["id"])
+        await bot.rec("sala")
+        await bot.env(t="listo", valor=True)
+        r = await b.esperar("REPORTE lobby")
+        comprobar(r["pantalla"] == "Sala" and r["reto"] is not None, "el Lobby muestra el reto elegido", r)
+        await b.esperar("FIN")
+        for n in nombres:
+            comprobar((CAPTURAS / "menus" / f"{n}.png").exists(), f"captura {n}.png", str(CAPTURAS / "menus"))
+    finally:
+        bot.cerrar()
+
+
 ESCENARIOS = {"laberinto": escenario_laberinto, "laberinto_player": escenario_laberinto_player,
               "sesion": escenario_sesion, "reinicio": escenario_reinicio,
               "panel": escenario_panel, "reto": escenario_reto, "espectador": escenario_espectador,
-              "hud": escenario_hud}
+              "hud": escenario_hud, "menus": escenario_menus}
 
 
 async def main():

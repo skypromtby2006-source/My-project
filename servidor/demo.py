@@ -5,7 +5,8 @@ el panel docente y las estadísticas no se vean vacíos al abrirlos en vivo.
     sembrar  ->  docente_demo (con contraseña generada), la clase "Química 5to A", un
                  reto del laberinto con semilla fija y 4 estudiantes *_demo inscritos,
                  con intentos ya jugados y errores variados por concepto.
-    limpiar  ->  borra SOLO eso (el docente demo, su clase, su reto y los *_demo).
+    limpiar  ->  borra SOLO eso: el docente demo con su clase y su reto, y todos los
+                 usuarios *_demo (también los creados en vivo durante la presentación).
 
 Idempotente: sembrar dos veces no duplica nada y deja la misma contraseña (la lee de
 demo_credenciales.txt). Va por `repositorio.py`, así sirve igual para SQLite (servidor
@@ -117,7 +118,8 @@ async def sembrar(repo: repositorio.Repositorio, carpeta: pathlib.Path) -> dict:
 
 
 async def limpiar(repo: repositorio.Repositorio, carpeta: pathlib.Path):
-    await repo.borrar_datos_demo(DOCENTE, [u for u, _, _ in ESTUDIANTES])
+    # Todos los *_demo: también los estudiantes que se crearon en vivo en la presentación
+    await repo.borrar_datos_demo(DOCENTE, await repo.usuarios_demo())
     (carpeta / ARCHIVO_CREDENCIALES).unlink(missing_ok=True)
 
 
@@ -148,7 +150,7 @@ async def ejecutar(accion: str, carpeta: pathlib.Path, sqlite: str | None = None
             print(linea)
         elif accion == "limpiar":
             await limpiar(repo, carpeta)
-            print("Datos de demo borrados (docente_demo, su clase, su reto y los *_demo).")
+            print("Datos de demo borrados (docente_demo, su clase, su reto y los usuarios *_demo).")
         else:
             print("Uso: demo.py sembrar|limpiar")
             return 1

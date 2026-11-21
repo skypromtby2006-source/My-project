@@ -66,7 +66,11 @@ async def test_limpiar_borra_solo_la_demo(motor, tmp_path, api, h):
     await db.inscribir(clase["id"], real["id"])
 
     await demo.sembrar(db, tmp_path)
+    await db.crear_usuario("eli_demo", "Eli", "#F5913F")     # creado en vivo en la presentación
+    await db.crear_usuario("xdemo", "No", "#F5913F")         # "demo" sin "_": no es de la demo
     await demo.limpiar(db, tmp_path)
+    assert await db.buscar_usuario("eli_demo") is None
+    assert await db.buscar_usuario("xdemo") is not None
     assert await db.buscar_docente(demo.DOCENTE) is None
     assert all([await db.buscar_usuario(u) is None for u, _, _ in demo.ESTUDIANTES])
     assert await db.intentos() == [] and await db.misiones() == []

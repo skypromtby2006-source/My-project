@@ -678,6 +678,12 @@ class Repositorio:
         await self.bd.execute(f"UPDATE docentes SET hash = {d.p(2)}, activo = true WHERE usuario = {d.p(1)}",
                               usuario, hash_)
 
+    async def usuarios_demo(self) -> list[str]:
+        """Usuarios que terminan en "_demo" (los 4 del sembrado y los que se crean en vivo
+        durante la presentación). ESCAPE porque "_" es comodín en LIKE."""
+        filas = await self.bd.fetch("SELECT usuario FROM usuarios WHERE usuario LIKE '%!_demo' ESCAPE '!'")
+        return [f["usuario"] for f in filas]
+
     async def borrar_datos_demo(self, docente: str, usuarios: list[str]):
         """Borra el docente de demo con sus clases, retos e intentos, y los estudiantes de
         demo con todo lo suyo. Nada más: los datos reales del colegio no se tocan.
