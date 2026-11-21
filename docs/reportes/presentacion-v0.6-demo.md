@@ -23,7 +23,7 @@ Brief: `MDs/PRESENTACION.md`. Fecha de la presentación: **sin completar** (el b
 ### Probado (cómo y resultado)
 - **pytest** (`scripts/probar_tests.sh`): **166 passed, 0 skipped**. Memoria 34 · SQLite 58 · PostgreSQL 58 · sin motor 16. Incluye `test_demo.py` (8): sembrar dos veces sin duplicados y con la misma contraseña; el panel docente con datos en los 5 conceptos; limpiar borra solo la demo (un docente, una clase, un `estu_real` y un `xdemo` quedan intactos) y se puede volver a sembrar; `--sembrar-demo` y `--limpiar-demo` del `.exe` sobre su propio `quimica.db`.
 - **Builds de Unity** (batch, editor cerrado): Linux y Windows `Succeeded`, 0 `error CS`.
-- **`probar_build.sh`**: los **9 escenarios** (laberinto, laberinto_player, sesion, reinicio, panel, reto, espectador, hud, menus) → `TODO OK ✔`, RESULTADO_BUILD comprobaciones ✔, 0 ✘.
+- **`probar_build.sh`**: los **9 escenarios** (laberinto, laberinto_player, sesion, reinicio, panel, reto, espectador, hud, menus) → `TODO OK ✔`, 69 comprobaciones ✔, 0 ✘.
 - **`probar_paquete.sh`**:
   - Docker en Arch, desde el zip: PostgreSQL, `probar_cliente` (modo agua + una partida del laberinto), panel, y `demo.py` sembrar ×2 sin duplicar (6 intentos) y limpiar → `PAQUETE OK ✔`.
   - `.exe` en GitHub Actions (windows-latest), run 44878438780 sobre la rama: además de lo de siempre, `--sembrar-demo` ×2 (1 docente, 1 clase, 6 intentos, 4 estudiantes; misma contraseña) y `--limpiar-demo` (borra solo la demo) → `PAQUETE OK ✔`.
