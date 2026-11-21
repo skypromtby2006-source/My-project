@@ -49,8 +49,8 @@ rm -rf "$RAIZ_ZIP"/Juego/*_DoNotShip
 # Servidor local: la carpeta de PyInstaller tal cual, SIN datos de otra PC
 if $CON_EXE; then
   cp -r "$EXE_DIR" "$RAIZ_ZIP/Servidor"
-  rm -f "$RAIZ_ZIP"/Servidor/{admin.txt,quimica.db,quimica.db-wal,quimica.db-shm,.env}
-  cp entrega/windows/abrir_firewall.bat "$RAIZ_ZIP/Servidor/"
+  rm -f "$RAIZ_ZIP"/Servidor/{admin.txt,quimica.db,quimica.db-wal,quimica.db-shm,.env,demo_credenciales.txt}
+  cp entrega/windows/abrir_firewall.bat entrega/servidor_local/*.bat "$RAIZ_ZIP/Servidor/"
 fi
 
 # Servidor dedicado: el MISMO contexto de build que usa el repo (compose con context ".").
@@ -69,7 +69,7 @@ cp entrega/LEEME.txt "$RAIZ_ZIP/"
 # Finales CRLF en .bat y LEEME: con LF, cmd.exe ejecuta mal etiquetas y goto.
 # La expresión es idempotente: no duplica el \r si ya estaba.
 TEXTOS=("$DED"/*.bat "$RAIZ_ZIP/LEEME.txt")
-$CON_EXE && TEXTOS+=("$RAIZ_ZIP/Servidor/abrir_firewall.bat")
+$CON_EXE && TEXTOS+=("$RAIZ_ZIP"/Servidor/*.bat)
 for f in "${TEXTOS[@]}"; do sed -i 's/\r*$/\r/' "$f"; done
 # Comprobación: ninguna línea de esos archivos puede terminar sin \r
 for f in "${TEXTOS[@]}"; do

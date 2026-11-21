@@ -21,7 +21,7 @@ a = Analysis(
     # server.py importa el panel dentro de funciones (para que sea opcional), y uvicorn
     # elige sus protocolos por nombre en tiempo de ejecución: se declaran a mano.
     hiddenimports=["server", "admin_api", "auth", "registro_logs", "estadisticas",
-                   "repositorio", "nivel"] + collect_submodules("uvicorn"),
+                   "repositorio", "nivel", "demo"] + collect_submodules("uvicorn"),
     excludes=["tkinter", "matplotlib", "IPython", "pytest"],
 )
 pyz = PYZ(a.pure)

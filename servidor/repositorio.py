@@ -671,5 +671,31 @@ class Repositorio:
             f["errores_concepto"] = (json.loads(e) if isinstance(e, str) else e) or {}
         return filas
 
+    # ------------------------------------------------------------- datos de demo (servidor/demo.py)
+    async def fijar_hash_docente(self, usuario: str, hash_: str):
+        """Solo lo usa sembrar_demo: re-sembrar deja la contraseña que dice demo_credenciales.txt."""
+        d = self.d
+        await self.bd.execute(f"UPDATE docentes SET hash = {d.p(2)}, activo = true WHERE usuario = {d.p(1)}",
+                              usuario, hash_)
+
+    async def borrar_datos_demo(self, docente: str, usuarios: list[str]):
+        """Borra el docente de demo con sus clases, retos e intentos, y los estudiantes de
+        demo con todo lo suyo. Nada más: los datos reales del colegio no se tocan.
+        Va en orden de hijos a padres por las claves foráneas (SQLite y PostgreSQL)."""
+        d = self.d
+        doc = f"(SELECT id FROM docentes WHERE usuario = {d.p(1)})"
+        clases = f"(SELECT id FROM clases WHERE docente_id IN {doc})"
+        retos = f"(SELECT id FROM retos WHERE clase_id IN {clases})"
+        await self.bd.execute(f"DELETE FROM intentos WHERE reto_id IN {retos}", docente)
+        await self.bd.execute(f"DELETE FROM retos WHERE clase_id IN {clases}", docente)
+        await self.bd.execute(f"DELETE FROM inscripciones WHERE clase_id IN {clases}", docente)
+        await self.bd.execute(f"DELETE FROM clases WHERE docente_id IN {doc}", docente)
+        await self.bd.execute(f"DELETE FROM docentes WHERE usuario = {d.p(1)}", docente)
+        for u in usuarios:
+            uid = f"(SELECT id FROM usuarios WHERE usuario = {d.p(1)})"
+            for tabla in ("intentos", "inscripciones", "misiones_completadas"):
+                await self.bd.execute(f"DELETE FROM {tabla} WHERE usuario_id IN {uid}", u)
+            await self.bd.execute(f"DELETE FROM usuarios WHERE usuario = {d.p(1)}", u)
+
     async def cerrar(self):
         await self.bd.cerrar()

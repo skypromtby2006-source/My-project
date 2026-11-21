@@ -70,10 +70,9 @@ def carpeta_escribible(base: pathlib.Path) -> str | None:
 
 
 def contrasena_al_azar(largo: int = 12) -> str:
-    """Letras y números sin los que se confunden al copiarlos a mano (0/O, 1/l/I): el
-    docente la lee en la ventana y la escribe en el navegador."""
-    alfabeto = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-    return "".join(secrets.choice(alfabeto) for _ in range(largo))
+    # Vive en auth.py: también la usa demo.py, que corre en Docker sin este archivo
+    import auth
+    return auth.contrasena_al_azar(largo)
 
 
 def preparar_admin(base: pathlib.Path) -> pathlib.Path | None:
@@ -145,6 +144,13 @@ def main():
     if getattr(sys, "frozen", False):
         # panel/dist viaja dentro del paquete (ver quimica_servidor.spec)
         os.environ.setdefault("PANEL_DIR", str(pathlib.Path(sys._MEIPASS) / "panel_dist"))
+
+    # sembrar_demo.bat / limpiar_demo.bat: el colegio no tiene Python, así que los datos
+    # de la presentación se cargan con el mismo .exe y sobre el mismo quimica.db
+    for opcion, accion in (("--sembrar-demo", "sembrar"), ("--limpiar-demo", "limpiar")):
+        if opcion in sys.argv[1:]:
+            import demo
+            sys.exit(asyncio.run(demo.ejecutar(accion, base, os.environ["SQLITE_RUTA"])))
 
     import server  # después de preparar el entorno: server.py lee las variables al importarse
 

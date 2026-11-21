@@ -45,6 +45,13 @@ def cargar_env():
 SCRYPT_N, SCRYPT_R, SCRYPT_P = 2 ** 14, 8, 1
 
 
+def contrasena_al_azar(largo: int = 12) -> str:
+    """Letras y números sin los que se confunden al copiarlos a mano (0/O, 1/l/I): el
+    docente la lee en la ventana y la escribe en el navegador."""
+    alfabeto = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    return "".join(secrets.choice(alfabeto) for _ in range(largo))
+
+
 def hash_contrasena(contrasena: str) -> str:
     """'scrypt$n$r$p$sal$hash' en hex. La sal es aleatoria por docente: dos docentes con
     la misma contraseña tienen hashes distintos."""
