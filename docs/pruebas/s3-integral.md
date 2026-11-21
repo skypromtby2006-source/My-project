@@ -9,7 +9,7 @@
 2. Abrir **http://localhost:8000** en el navegador.
    - Usuario: `admin`
    - Contraseña: la de `ADMIN_PASSWORD` en el archivo `.env` de la raíz del repo (te la paso en el reporte).
-3. `aa`. El build de Linux ya está compilado con los cambios del Sprint 3.
+3. `scripts/jugar_linux.sh 2`. El build de Linux ya está compilado con los cambios del Sprint 3.
 4. Anotar la hora de inicio: si algo falla, se busca en la página **Logs** del panel o en `scripts/servidor_logs.sh`.
 
 ## Pasos
