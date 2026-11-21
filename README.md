@@ -30,6 +30,8 @@ Requisitos: Docker con Compose (sin `sudo`), Python 3 y Unity `6000.3.27f1` con 
 | `scripts/pgadmin.sh` | Levanta pgAdmin en http://127.0.0.1:5050 para revisar la BD (ver abajo) |
 | `scripts/probar_servidor.sh` | Prueba de 2 jugadores simulados, sin Unity → `TODO OK ✔` |
 | `scripts/probar_build.sh [escenario…]` | Prueba el **build real** de Linux sin ventana contra el servidor de Docker (Wizard/Player entre partidas, salidas de sala, sesión única, reconexión, progreso) → `TODO OK ✔`. Los escenarios `reinicio` y `progreso` reinician el servidor |
+| `scripts/sembrar_demo.py [quimica.db]` · `scripts/limpiar_demo.py` | Datos de demo de la presentación (docente_demo, "Química 5to A", un reto con semilla fija y 4 estudiantes `*_demo` con intentos). Idempotente; limpiar borra solo la demo. En Windows: `Servidor\sembrar_demo.bat` / `limpiar_demo.bat` |
+| `scripts/capturas_panel.py [carpeta]` | Capturas del panel (login, admin y docente) con los datos de demo, con Firefox headless → `docs/presentacion/capturas/panel/` |
 | `scripts/panel_dev.sh` | Panel en modo desarrollo (Vite en http://localhost:5173, recarga al guardar), contra el servidor en :8000 |
 | `scripts/jugar_linux.sh [N]` | Abre N instancias del build de Linux (logs en `logs/`) |
 | `scripts/probar_tests.sh` | pytest del servidor contra memoria, SQLite y PostgreSQL (levanta un PostgreSQL descartable) |
