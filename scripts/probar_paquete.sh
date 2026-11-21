@@ -96,6 +96,15 @@ probar_docker() {
     || { tail -20 "$TMP/cliente_docker.log"; return 1; }
   grep -q "TODO OK" "$TMP/cliente_docker.log" && echo "  probar_cliente: TODO OK ✔"
   verificar_panel 8000 prueba "$clave" true "Conectado a PostgreSQL"
+  # sembrar_demo_docker.bat: demo.py dentro del contenedor, contra PostgreSQL
+  eval "$compose exec -T servidor python demo.py sembrar" > "$TMP/demo_docker1.log" 2>&1 || { cat "$TMP/demo_docker1.log"; return 1; }
+  eval "$compose exec -T servidor python demo.py sembrar" > "$TMP/demo_docker2.log" 2>&1 || { cat "$TMP/demo_docker2.log"; return 1; }
+  [ "$(grep -o 'contraseña: [^ ]*' "$TMP/demo_docker1.log")" = "$(grep -o 'contraseña: [^ ]*' "$TMP/demo_docker2.log")" ] \
+    || { echo "ERROR: la contraseña del docente cambió al re-sembrar en Docker"; return 1; }
+  local intentos; intentos="$(eval "$compose exec -T db psql -U quimica -d quimica -tAc 'SELECT count(*) FROM intentos'" | tr -d '[:space:]')"
+  [ "$intentos" = 6 ] || { echo "ERROR: sembrar dos veces en Docker dejó $intentos intentos (esperado 6)"; return 1; }
+  eval "$compose exec -T servidor python demo.py limpiar" >/dev/null 2>&1 || { echo "ERROR: demo.py limpiar falló en Docker"; return 1; }
+  echo "  datos de demo en PostgreSQL: sembrar dos veces sin duplicar y limpiar ✔"
   eval "$compose down -v" >/dev/null 2>&1
   echo "  Paquete Docker OK ✔"
 }
@@ -174,7 +183,46 @@ n = sqlite3.connect(sys.argv[1]).execute("SELECT count(*) FROM usuarios").fetcho
 assert n >= 3, f"quimica.db tiene {n} usuarios; probar_cliente registra 3"
 print(f"  quimica.db junto al ejecutable: {n} usuarios guardados")
 EOF
+  probar_demo_exe "$exe"
   echo "  Servidor local OK ✔"
+}
+
+# sembrar_demo.bat / limpiar_demo.bat llaman al mismo .exe con --sembrar-demo / --limpiar-demo,
+# con el servidor abierto (como en la presentación): dos veces sin duplicar, y limpiar.
+probar_demo_exe() {
+  local exe="$1" dir; dir="$(dirname "$exe")"
+  local env_exe=(env -u DATABASE_URL -u ADMIN_USER -u ADMIN_PASSWORD -u JWT_SECRET -u SQLITE_RUTA)
+  (cd "$TMP" && "${env_exe[@]}" "$exe" --sembrar-demo > "$TMP/demo1.log" 2>&1) || { cat "$TMP/demo1.log"; return 1; }
+  (cd "$TMP" && "${env_exe[@]}" "$exe" --sembrar-demo > "$TMP/demo2.log" 2>&1) || { cat "$TMP/demo2.log"; return 1; }
+  [ -f "$dir/demo_credenciales.txt" ] || { echo "ERROR: --sembrar-demo no dejó demo_credenciales.txt"; return 1; }
+  "$PY" - "$dir" <<'EOF2'
+import pathlib, sqlite3, sys
+d = pathlib.Path(sys.argv[1])
+cred = dict(l.split("=", 1) for l in (d / "demo_credenciales.txt").read_text(encoding="utf-8").splitlines()
+            if "=" in l and not l.startswith("#"))
+admin = dict(l.split("=", 1) for l in (d / "admin.txt").read_text(encoding="utf-8").splitlines()
+             if "=" in l and not l.startswith("#"))
+assert cred["ADMIN_PASSWORD"].strip() == admin["ADMIN_PASSWORD"].strip(), "la contraseña de admin no coincide"
+bd = sqlite3.connect(d / "quimica.db")
+n = lambda sql: bd.execute(sql).fetchone()[0]
+cuenta = (n("SELECT count(*) FROM docentes WHERE usuario='docente_demo'"),
+          n("SELECT count(*) FROM clases"), n("SELECT count(*) FROM intentos"),
+          n("SELECT count(*) FROM usuarios WHERE usuario LIKE '%!_demo' ESCAPE '!'"))
+assert cuenta == (1, 1, 6, 4), f"sembrar dos veces dejó {cuenta} (esperado 1 docente, 1 clase, 6 intentos, 4 estudiantes)"
+print("  --sembrar-demo dos veces: 1 docente, 1 clase, 6 intentos, 4 estudiantes (sin duplicar) ✔")
+EOF2
+  local c1 c2; c1="$(grep -o 'contraseña: [^ ]*' "$TMP/demo1.log" | tr -d '\r')"; c2="$(grep -o 'contraseña: [^ ]*' "$TMP/demo2.log" | tr -d '\r')"
+  [ -n "$c1" ] && [ "$c1" = "$c2" ] || { echo "ERROR: la contraseña del docente cambió al re-sembrar ($c1 / $c2)"; return 1; }
+  (cd "$TMP" && "${env_exe[@]}" "$exe" --limpiar-demo > "$TMP/demo3.log" 2>&1) || { cat "$TMP/demo3.log"; return 1; }
+  "$PY" - "$dir/quimica.db" <<'EOF2'
+import sqlite3, sys
+bd = sqlite3.connect(sys.argv[1])
+quedan = bd.execute("SELECT count(*) FROM usuarios WHERE usuario LIKE '%!_demo' ESCAPE '!'").fetchone()[0] \
+    + bd.execute("SELECT count(*) FROM docentes WHERE usuario='docente_demo'").fetchone()[0]
+assert quedan == 0, f"después de --limpiar-demo quedan {quedan} filas de demo"
+assert bd.execute("SELECT count(*) FROM usuarios").fetchone()[0] >= 3, "limpiar borró usuarios que no son de la demo"
+print("  --limpiar-demo: borra solo la demo ✔")
+EOF2
 }
 
 # ------------------------------------------------------------------ qué probar
