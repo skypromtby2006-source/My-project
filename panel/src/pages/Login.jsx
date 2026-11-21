@@ -13,7 +13,7 @@ export default function Login({ alEntrar }) {
     setError('')
     try {
       const datos = await login(usuario.trim(), contrasena)
-      alEntrar(datos.usuario)
+      alEntrar(datos)
     } catch (err) {
       setError(err.message === 'Failed to fetch' ? 'No se pudo conectar con el servidor' : err.message)
       setEnviando(false)
@@ -24,7 +24,7 @@ export default function Login({ alEntrar }) {
     <div className="pantalla-login">
       <form className="tarjeta login" onSubmit={enviar}>
         <div className="marca grande">⚗️ Química VR</div>
-        <p className="tenue">Panel de administración del servidor</p>
+        <p className="tenue">Panel del servidor: administrador o docente</p>
         <label>Usuario<input autoFocus autoComplete="username" value={usuario} onChange={e => setUsuario(e.target.value)} /></label>
         <label>Contraseña<input type="password" autoComplete="current-password" value={contrasena}
                                 onChange={e => setContrasena(e.target.value)} /></label>

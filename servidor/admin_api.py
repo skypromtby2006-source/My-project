@@ -13,6 +13,9 @@ import json
 import logging
 import os
 import pathlib
+import random
+import re
+import secrets
 import time
 from collections import Counter
 from datetime import datetime, timezone
@@ -21,6 +24,8 @@ from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSock
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+
+import auth
 
 log = logging.getLogger("servidor")
 
@@ -31,6 +36,39 @@ ESTADO_CADA_S = 2.0
 class Login(BaseModel):
     usuario: str = Field(max_length=100)
     contrasena: str = Field(max_length=200)
+
+
+class NuevoDocente(BaseModel):
+    usuario: str = Field(min_length=4, max_length=16)
+    nombre: str = Field(min_length=1, max_length=40)
+    contrasena: str = Field(min_length=8, max_length=200)
+
+
+class NuevaClase(BaseModel):
+    nombre: str = Field(min_length=1, max_length=40)
+
+
+class NuevoReto(BaseModel):
+    clase_id: int
+    nivel: str = Field(default="laberinto_01", max_length=60)
+    semilla: int | None = Field(default=None, ge=0, le=2_000_000_000)
+    jugadores_por_grupo: int = Field(default=2, ge=2, le=8)
+    tiempo_limite_s: int | None = Field(default=None, ge=60, le=7200)
+
+
+# 8 caracteres sin los que se confunden al dictarlos o copiarlos de la pizarra
+# (O/0, I/1/L): 31 símbolos^8 ≈ 850 mil millones de códigos, imposible de adivinar a mano.
+ALFABETO_CLASE = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+FORMATO_USUARIO = re.compile(r"^[a-z0-9_]{4,16}$")
+
+
+def nuevo_codigo_clase() -> str:
+    return "".join(secrets.choice(ALFABETO_CLASE) for _ in range(8))
+
+
+def niveles_disponibles() -> list[str]:
+    import nivel
+    return sorted(x.stem for x in nivel.RUTA_NIVELES.glob("*.json"))
 
 
 class Aviso(BaseModel):
@@ -60,10 +98,7 @@ class Auditoria:
             self.siguiente_id += 1
             return
         try:
-            async with self.juego.db.acquire() as c:
-                await c.execute(
-                    "INSERT INTO auditoria_admin (admin, accion, objetivo, detalle, ip) VALUES ($1, $2, $3, $4, $5)",
-                    admin, accion, objetivo, json.dumps(detalle, ensure_ascii=False), ip)
+            await self.juego.db.anotar_auditoria(admin, accion, objetivo, detalle, ip)
         except Exception as e:
             log.error("No se pudo guardar la auditoría (%s %s): %s", accion, objetivo, e)
 
@@ -73,14 +108,8 @@ class Auditoria:
             filas = [f for f in reversed(self.memoria) if not accion or f["accion"] == accion]
             return {"total": len(filas), "pagina": pagina, "por_pagina": POR_PAGINA,
                     "acciones": filas[(pagina - 1) * POR_PAGINA: pagina * POR_PAGINA]}
-        donde, args = ("WHERE accion = $1", [accion]) if accion else ("", [])
-        async with self.juego.db.acquire() as c:
-            total = await c.fetchval(f"SELECT count(*) FROM auditoria_admin {donde}", *args)
-            filas = await c.fetch(
-                f"SELECT id, admin, accion, objetivo, detalle, ip, fecha FROM auditoria_admin {donde} "
-                f"ORDER BY id DESC LIMIT {POR_PAGINA} OFFSET {(pagina - 1) * POR_PAGINA}", *args)
-        return {"total": total, "pagina": pagina, "por_pagina": POR_PAGINA,
-                "acciones": [{**dict(f), "detalle": json.loads(f["detalle"] or "{}")} for f in filas]}
+        total, filas = await self.juego.db.listar_auditoria(pagina, POR_PAGINA, accion)
+        return {"total": total, "pagina": pagina, "por_pagina": POR_PAGINA, "acciones": filas}
 
 
 # ----------------------------------------------------------------- vistas del estado en memoria
@@ -117,6 +146,43 @@ def estado(juego) -> dict:
     }
 
 
+def estado_de_estudiantes(juego, estudiantes: set[str]) -> dict:
+    """Partidas en vivo vistas por un docente: solo las salas donde hay alguno de SUS
+    estudiantes, y en ellas solo se nombra a sus estudiantes (el resto va anónimo)."""
+    salas = []
+    for s in juego.salas.values():
+        if not any(j.usuario in estudiantes for j in s.jugadores.values()):
+            continue
+        info = info_sala(s)
+        for j, x in zip(s.jugadores.values(), info["jugadores"]):
+            if j.usuario not in estudiantes:
+                x.update(usuario="", nombre="(de otra clase)")
+        info["reto"] = getattr(s, "reto", None) and s.reto["id"]
+        p = getattr(s, "partida", None)
+        if p is not None:
+            info["laberinto"] = {"sala": p.sala_num, "errores": p.errores, "completada": p.completada,
+                                 "segundos": round(time.monotonic() - p.t_inicio)}
+        salas.append(info)
+    conectados = [info_jugador(j) for j in juego.jugadores.values() if j.usuario in estudiantes]
+    return {"salas": salas, "conectados": conectados}
+
+
+def logs_de_estudiantes(juego, logs: list[dict], estudiantes: set[str]) -> list[dict]:
+    """Logs que mencionan a un estudiante del docente: por su usuario, por el id de su
+    conexión o por el código de la sala donde está (muchas líneas del servidor nombran
+    la sala o la conexión y no el usuario). Ver docs/decisiones-revision.md."""
+    claves = set(estudiantes)
+    for j in juego.jugadores.values():
+        if j.usuario in estudiantes:
+            claves.add(j.id)
+            if j.sala is not None:
+                claves.add(j.sala.id)
+    if not claves:
+        return []
+    patron = re.compile(r"\b(" + "|".join(re.escape(c) for c in sorted(claves)) + r")\b")
+    return [x for x in logs if patron.search(x["mensaje"])]
+
+
 # ----------------------------------------------------------------- perfiles y progreso
 async def listar_usuarios(juego, buscar: str, pagina: int) -> dict:
     pagina = max(1, pagina)
@@ -137,26 +203,7 @@ async def listar_usuarios(juego, buscar: str, pagina: int) -> dict:
         total = len(filas)
         filas = filas[(pagina - 1) * POR_PAGINA: pagina * POR_PAGINA]
     else:
-        patron = f"%{buscar}%"
-        async with juego.db.acquire() as c:
-            total = await c.fetchval(
-                "SELECT count(*) FROM usuarios WHERE usuario ILIKE $1 OR nombre ILIKE $1", patron)
-            # Los errores salen de eventos (reaccion_fallida), igual que en el perfil del juego:
-            # así cuentan también los de misiones reiniciadas o abandonadas.
-            filas = await c.fetch(f"""
-                SELECT u.usuario, u.nombre, u.color, u.creado, u.ultimo_login, u.bloqueado,
-                       count(m.id) AS completadas,
-                       min(m.duracion_s) FILTER (WHERE m.mision = $2) AS mejor_tiempo_s,
-                       coalesce(e.n, 0) AS errores
-                FROM usuarios u
-                LEFT JOIN misiones_completadas m ON m.usuario_id = u.id
-                LEFT JOIN (SELECT detalle->>'usuario' AS usuario, count(*) AS n FROM eventos
-                           WHERE tipo = 'reaccion_fallida' GROUP BY 1) e ON e.usuario = u.usuario
-                WHERE u.usuario ILIKE $1 OR u.nombre ILIKE $1
-                GROUP BY u.id, e.n
-                ORDER BY u.ultimo_login DESC NULLS LAST
-                LIMIT {POR_PAGINA} OFFSET {(pagina - 1) * POR_PAGINA}""", patron, juego.MISION_AGUA)
-        filas = [dict(f) for f in filas]
+        total, filas = await juego.db.listar_usuarios(buscar, pagina, POR_PAGINA, juego.MISION_AGUA)
     for f in filas:
         f["conectado"] = f["usuario"] in juego.sesiones
         f["bloqueado"] = bool(f.get("bloqueado"))
@@ -196,21 +243,10 @@ async def detalle_usuario(juego, usuario: str) -> dict | None:
         fallos = [{**e["detalle"], "fecha": e["fecha"]} for e in juego.eventos_mem
                   if e["tipo"] == "reaccion_fallida" and e["detalle"].get("usuario") == usuario]
     else:
-        async with juego.db.acquire() as c:
-            fila = await c.fetchrow(
-                "SELECT id, usuario, nombre, color, creado, ultimo_login, bloqueado, motivo_bloqueo "
-                "FROM usuarios WHERE usuario = $1", usuario)
-            if fila is None:
-                return None
-            perfil = dict(fila)
-            uid = perfil.pop("id")
-            perfil["bloqueado"] = bool(perfil["bloqueado"])
-            historial = [dict(h) for h in await c.fetch(
-                "SELECT fecha, mision, sala, duracion_s, errores FROM misiones_completadas "
-                "WHERE usuario_id = $1 ORDER BY fecha DESC LIMIT 200", uid)]
-            fallos = [{**json.loads(e["detalle"]), "fecha": e["fecha"]} for e in await c.fetch(
-                "SELECT detalle, fecha FROM eventos WHERE tipo = 'reaccion_fallida' "
-                "AND detalle->>'usuario' = $1 ORDER BY fecha DESC", usuario)]
+        datos = await juego.db.detalle_usuario(usuario)
+        if datos is None:
+            return None
+        perfil, historial, fallos = datos
     for h in historial:
         h["duracion_s"] = round(h["duracion_s"], 1)
     tiempos = [h["duracion_s"] for h in historial if h["mision"] == juego.MISION_AGUA]
@@ -250,13 +286,49 @@ def crear_app(juego, autenticador, registro) -> FastAPI:
     def ip_de(request: Request) -> str:
         return request.client.host if request.client else "?"
 
-    def admin_actual(request: Request) -> str:
+    def sesion(request: Request) -> dict:
         cabecera = request.headers.get("authorization", "")
         token = cabecera[7:] if cabecera.lower().startswith("bearer ") else ""
-        admin = autenticador.validar_token(token) if token else None
-        if admin is None:
+        datos = autenticador.leer_token(token) if token else None
+        if datos is None:
             raise HTTPException(401, "Sesión inválida o vencida: vuelve a iniciar sesión")
-        return admin
+        return datos
+
+    def admin_actual(request: Request) -> str:
+        datos = sesion(request)
+        if datos["rol"] != "admin":
+            # 403 y no 401: el docente tiene una sesión válida, solo que esto no es suyo
+            raise HTTPException(403, "Solo el administrador puede hacer esto")
+        return datos["sub"]
+
+    def bd():
+        if juego.db is None:
+            raise HTTPException(503, "El rol docente necesita la base de datos (PostgreSQL o SQLite)")
+        return juego.db
+
+    async def docente_actual(request: Request) -> dict:
+        """El docente del token, leído de la BD en cada pedido: si el admin lo desactiva,
+        su sesión deja de valer en el acto (no hay que esperar a que venza el JWT)."""
+        datos = sesion(request)
+        if datos["rol"] != "docente":
+            raise HTTPException(403, "Esta sección es del rol docente")
+        doc = await bd().docente_por_id(int(datos.get("did", 0)))
+        if doc is None or not doc["activo"]:
+            raise HTTPException(401, "Cuenta de docente desactivada: habla con el administrador")
+        return doc
+
+    async def clase_propia(clase_id: int, doc: dict) -> dict:
+        # 404 y no 403 con las clases de otro docente: así ni siquiera se entera de que existen
+        clase = await bd().clase(clase_id)
+        if clase is None or clase["docente_id"] != doc["id"]:
+            raise HTTPException(404, "No existe esa clase")
+        return clase
+
+    async def reto_propio(reto_id: int, doc: dict) -> dict:
+        reto = await bd().reto(reto_id)
+        if reto is None or reto["docente_id"] != doc["id"]:
+            raise HTTPException(404, "No existe ese reto")
+        return reto
 
     # ---------------------------------------------------------- acceso
     @app.post("/api/login")
@@ -265,13 +337,25 @@ def crear_app(juego, autenticador, registro) -> FastAPI:
         if not autenticador.permitir_intento(ip):
             await auditoria.anotar(datos.usuario[:40], "login_bloqueado", ip=ip, detalle={"motivo": "más de 5 intentos por minuto"})
             raise HTTPException(429, "Demasiados intentos: espera un minuto")
-        if not autenticador.verificar(datos.usuario, datos.contrasena):
-            # Se anota el usuario intentado (recortado), nunca la contraseña
-            await auditoria.anotar(datos.usuario[:40], "login_fallido", ip=ip)
-            raise HTTPException(401, "Usuario o contraseña incorrectos")
-        await auditoria.anotar(datos.usuario, "login", ip=ip)
-        return {"token": autenticador.emitir_token(datos.usuario), "usuario": datos.usuario,
-                "expira_en_s": 8 * 3600}
+        if autenticador.verificar(datos.usuario, datos.contrasena):
+            await auditoria.anotar(datos.usuario, "login", ip=ip)
+            return {"token": autenticador.emitir_token(datos.usuario), "usuario": datos.usuario,
+                    "rol": "admin", "nombre": datos.usuario, "expira_en_s": 8 * 3600}
+        # Si no es el admin del .env, puede ser un docente (tabla docentes, hash scrypt)
+        doc = None
+        if juego.db is not None:
+            doc = await juego.db.buscar_docente(datos.usuario.strip().lower())
+        if doc is not None and auth.verificar_contrasena(datos.contrasena, doc["hash"]):
+            if not doc["activo"]:
+                await auditoria.anotar(doc["usuario"], "login_docente_inactivo", ip=ip)
+                raise HTTPException(403, "Cuenta de docente desactivada: habla con el administrador")
+            await auditoria.anotar(doc["usuario"], "login_docente", ip=ip)
+            return {"token": autenticador.emitir_token(doc["usuario"], "docente", doc["id"]),
+                    "usuario": doc["usuario"], "rol": "docente", "nombre": doc["nombre"],
+                    "expira_en_s": 8 * 3600}
+        # Se anota el usuario intentado (recortado), nunca la contraseña
+        await auditoria.anotar(datos.usuario[:40], "login_fallido", ip=ip)
+        raise HTTPException(401, "Usuario o contraseña incorrectos")
 
     # ---------------------------------------------------------- gestión del servidor
     @app.get("/api/estado")
@@ -333,6 +417,114 @@ def crear_app(juego, autenticador, registro) -> FastAPI:
     async def desbloquear(usuario: str, datos: ConMotivo, request: Request, admin: str = Depends(admin_actual)):
         return await bloqueo(usuario, False, datos, request, admin)
 
+    # ---------------------------------------------------------- docentes (solo el admin)
+    @app.get("/api/docentes")
+    async def ver_docentes(admin: str = Depends(admin_actual)):
+        return await bd().listar_docentes()
+
+    @app.post("/api/docentes")
+    async def crear_docente(datos: NuevoDocente, request: Request, admin: str = Depends(admin_actual)):
+        usuario = datos.usuario.strip().lower()
+        if not FORMATO_USUARIO.match(usuario):
+            raise HTTPException(422, "Usuario inválido: de 4 a 16 caracteres, solo letras, números y guion bajo")
+        if usuario == autenticador.usuario.lower():
+            raise HTTPException(409, "Ese usuario es el del administrador")
+        doc = await bd().crear_docente(usuario, datos.nombre.strip(), auth.hash_contrasena(datos.contrasena))
+        if doc is None:
+            raise HTTPException(409, f"Ya existe el docente {usuario}")
+        await auditoria.anotar(admin, "crear_docente", usuario, {"nombre": doc["nombre"]}, ip_de(request))
+        return doc
+
+    async def activacion(usuario: str, activo: bool, request: Request, admin: str):
+        usuario = usuario.strip().lower()
+        if not await bd().fijar_docente_activo(usuario, activo):
+            raise HTTPException(404, f"No existe el docente {usuario}")
+        await auditoria.anotar(admin, "activar_docente" if activo else "desactivar_docente", usuario, ip=ip_de(request))
+        return {"ok": True}
+
+    @app.post("/api/docentes/{usuario}/activar")
+    async def activar_docente(usuario: str, request: Request, admin: str = Depends(admin_actual)):
+        return await activacion(usuario, True, request, admin)
+
+    @app.post("/api/docentes/{usuario}/desactivar")
+    async def desactivar_docente(usuario: str, request: Request, admin: str = Depends(admin_actual)):
+        return await activacion(usuario, False, request, admin)
+
+    # ---------------------------------------------------------- rol docente: solo lo suyo
+    @app.get("/api/docente/yo")
+    async def yo(doc: dict = Depends(docente_actual)):
+        return {"usuario": doc["usuario"], "nombre": doc["nombre"]}
+
+    @app.get("/api/docente/clases")
+    async def mis_clases(doc: dict = Depends(docente_actual)):
+        return await bd().clases_de_docente(doc["id"])
+
+    @app.post("/api/docente/clases")
+    async def crear_clase(datos: NuevaClase, request: Request, doc: dict = Depends(docente_actual)):
+        for _ in range(10):  # un choque de códigos es casi imposible; si pasa, se sortea otro
+            clase = await bd().crear_clase(doc["id"], datos.nombre.strip(), nuevo_codigo_clase())
+            if clase is not None:
+                await auditoria.anotar(doc["usuario"], "crear_clase", clase["codigo"],
+                                       {"nombre": clase["nombre"]}, ip_de(request))
+                return clase
+        raise HTTPException(500, "No se pudo generar un código de clase; intenta de nuevo")
+
+    @app.get("/api/docente/clases/{clase_id}")
+    async def ver_clase(clase_id: int, doc: dict = Depends(docente_actual)):
+        clase = await clase_propia(clase_id, doc)
+        clase.pop("docente_id")
+        return {"clase": clase, "inscritos": await bd().inscritos(clase_id)}
+
+    @app.get("/api/docente/niveles")
+    async def niveles(doc: dict = Depends(docente_actual)):
+        return niveles_disponibles()
+
+    @app.get("/api/docente/retos")
+    async def mis_retos(doc: dict = Depends(docente_actual)):
+        return await bd().retos_de_docente(doc["id"])
+
+    @app.post("/api/docente/retos")
+    async def crear_reto(datos: NuevoReto, request: Request, doc: dict = Depends(docente_actual)):
+        await clase_propia(datos.clase_id, doc)
+        if datos.nivel not in niveles_disponibles():
+            raise HTTPException(422, f"No existe el nivel {datos.nivel}")
+        # Semilla fija: todos los grupos del reto juegan el MISMO sorteo de números, así
+        # los resultados se pueden comparar. Si el docente no elige una, se sortea al crear.
+        semilla = datos.semilla if datos.semilla is not None else random.randint(1, 999_999)
+        reto = await bd().crear_reto(datos.clase_id, datos.nivel, semilla,
+                                     datos.jugadores_por_grupo, datos.tiempo_limite_s)
+        await auditoria.anotar(doc["usuario"], "crear_reto", str(reto["id"]),
+                               {"clase": reto["clase"], "semilla": semilla}, ip_de(request))
+        return reto
+
+    @app.post("/api/docente/retos/{reto_id}/cerrar")
+    async def cerrar_reto(reto_id: int, request: Request, doc: dict = Depends(docente_actual)):
+        await reto_propio(reto_id, doc)
+        await bd().cerrar_reto(reto_id)
+        await auditoria.anotar(doc["usuario"], "cerrar_reto", str(reto_id), ip=ip_de(request))
+        return {"ok": True}
+
+    @app.get("/api/docente/retos/{reto_id}/resultados")
+    async def resultados_reto(reto_id: int, doc: dict = Depends(docente_actual)):
+        reto = await reto_propio(reto_id, doc)
+        return {"reto": reto, "intentos": await bd().intentos(reto_id=reto_id)}
+
+    @app.get("/api/docente/estudiantes/{usuario}")
+    async def resultados_estudiante(usuario: str, doc: dict = Depends(docente_actual)):
+        usuario = usuario.strip().lower()
+        if usuario not in await bd().estudiantes_de_docente(doc["id"]):
+            raise HTTPException(404, "Ese estudiante no está en tus clases")
+        return {"usuario": usuario, "intentos": await bd().intentos(usuario=usuario, docente_id=doc["id"])}
+
+    @app.get("/api/docente/vivo")
+    async def vivo_docente(doc: dict = Depends(docente_actual)):
+        return estado_de_estudiantes(juego, await bd().estudiantes_de_docente(doc["id"]))
+
+    @app.get("/api/docente/logs")
+    async def logs_docente(doc: dict = Depends(docente_actual)):
+        estudiantes = await bd().estudiantes_de_docente(doc["id"])
+        return {"logs": logs_de_estudiantes(juego, registro.recientes(2000), estudiantes)[-300:]}
+
     # ---------------------------------------------------------- auditoría de perfiles
     @app.get("/api/usuarios")
     async def usuarios(buscar: str = "", pagina: int = 1, admin: str = Depends(admin_actual)):
@@ -367,7 +559,7 @@ def crear_app(juego, autenticador, registro) -> FastAPI:
     async def en_vivo(ws: WebSocket, token: str = ""):
         # El token va en la URL porque el navegador no deja poner headers al abrir un WebSocket
         await ws.accept()
-        if autenticador.validar_token(token) is None:
+        if autenticador.validar_token(token) is None:   # solo admin: el docente usa /api/docente/vivo
             # 4401 = código propio; el panel lo reconoce y vuelve al login
             await ws.close(code=4401, reason="token inválido")
             return

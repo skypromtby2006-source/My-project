@@ -22,11 +22,17 @@ using UnityEngine;
     public List<EntradaHistorial> historial = new List<EntradaHistorial>();
 }
 
+// Rol docente (revisión 20/11): clases del estudiante y retos que puede elegir el anfitrión
+[Serializable] public class InfoClase { public string codigo, nombre, docente; }
+[Serializable] public class InfoReto { public int id; public string nombre; public int jugadores; public int tiempo_limite_s; }
+
 [Serializable] public class InfoPerfil
 {
     public string id;              // id de esta conexión, el mismo que usa la sala
     public string usuario, nombre, color;
     public InfoProgreso progreso;
+    public List<InfoClase> clases = new List<InfoClase>();
+    public bool docente;           // true = docente espectador (login_docente): solo mira
 }
 
 [Serializable] public class InfoSala
@@ -34,6 +40,9 @@ using UnityEngine;
     public string id; public string nombre; public string host;
     public int maximo; public int cantidad; public string estado;
     public List<InfoJugador> jugadores = new List<InfoJugador>();
+    public int reto;               // 0 = sin reto (se juega como siempre)
+    public List<InfoReto> retos = new List<InfoReto>();   // los del anfitrión
+    public int espectadores;       // docentes mirando (no cuentan en `cantidad`)
 }
 
 // Misión: los nombres de campo son idénticos a los de server.py (Mision.info)
@@ -68,16 +77,54 @@ using UnityEngine;
 
 [Serializable] public class Aparicion { public string id; public float x, y, z; }
 
+// ---------- Laberinto (S4): el nivel llega en inicio.nivel; los números de cada sala en sala_estado ----------
+[Serializable] public class InfoLado { public List<string> grilla = new List<string>(); public List<int> aparicion = new List<int>(); }
+[Serializable] public class InfoLados { public InfoLado wizard; public InfoLado player; }
+[Serializable] public class InfoConsola { public string id; public string tipo; public List<int> pos = new List<int>(); }
+[Serializable] public class ConsolasLado { public List<InfoConsola> wizard = new List<InfoConsola>(); public List<InfoConsola> player = new List<InfoConsola>(); }
+[Serializable] public class InfoMontacargas { public string id; public List<int> pos = new List<int>(); }
+[Serializable] public class InfoPuerta { public string id; public List<int> palanca_wizard = new List<int>(); public List<int> palanca_player = new List<int>(); }
+[Serializable] public class InfoSalaLayout { public int n; public string nombre, concepto, reaccion, luz; public ConsolasLado consolas; public InfoMontacargas montacargas; public InfoPuerta puerta; }
+[Serializable] public class PalancasEstado { public bool wizard; public bool player; }
+[Serializable] public class Coeficientes { public int H2, O2, H2O; }
+// Números visibles de la sala actual (lo que ve cada lado). JsonUtility deja en 0/null
+// los campos que no vienen: cada sala trae solo los suyos.
+[Serializable] public class InfoDatos
+{
+    public int pide_h2o_mol;
+    public Coeficientes coeficientes;
+    public float agua_mol, naoh_mol, hcl_g, h2_mol, nh3_mol, n2_teorica_mol, teorica_g, real_g;
+}
+[Serializable] public class InfoSalaEstado
+{
+    public int sala; public string nombre, concepto, reaccion, luz, puerta, mensaje;
+    public bool completada_nivel;
+    public bool tiempo_agotado;    // el reto tenía tiempo límite y se acabó
+    public PalancasEstado palancas;
+    public InfoDatos datos;
+}
+[Serializable] public class InfoNivel
+{
+    public string nivel;
+    public InfoLados lados;
+    public float ventana_palanca_s;
+    public int total_salas;
+    public List<InfoSalaLayout> salas = new List<InfoSalaLayout>();
+    public InfoSalaEstado sala;   // estado de la sala actual al arrancar
+}
+
 [Serializable] public class Mensaje
 {
     public string t;            // tipo de mensaje
     public string id, nombre, msg;
     public string motivo;       // en "expulsado" y "sala_cerrada" (acciones del panel web)
+    public string docente;      // en "clase_unida"
     public InfoSala sala;
     public List<InfoSala> lista;
     public InfoMision mision;
+    public InfoNivel nivel;     // en "inicio" cuando modo = laberinto
     public List<Aparicion> apariciones = new List<Aparicion>();   // en "inicio": dónde aparece cada uno
-    public float x, y, z, ry;
+    public float x, y, z, ry, pitch;
 
     // "obj" llega como objeto en el mensaje "obj" y como texto en "senal". JsonUtility
     // no admite un campo con dos tipos, así que esos mensajes se leen aparte (ver Update)
@@ -86,6 +133,7 @@ using UnityEngine;
     [NonSerialized] public string objId, por;      // mensaje "senal"
     [NonSerialized] public EstadoMision estado;    // mensaje "estado"
     [NonSerialized] public InfoPerfil perfil;      // mensaje "perfil"
+    [NonSerialized] public InfoSalaEstado salaEstado;  // mensaje "sala_estado" (laberinto)
 }
 
 [Serializable] class MsgObj { public InfoObjeto obj; }
@@ -107,9 +155,18 @@ public class ClienteRed : MonoBehaviour
     public InfoMision MisionActual { get; private set; }
     public EstadoMision EstadoActual => MisionActual?.estado;
 
+    // Laberinto (S4): el nivel llega en "inicio" y el estado de la sala en "sala_estado"
+    public InfoNivel NivelActual { get; private set; }
+    public InfoSalaEstado SalaEstadoActual { get; private set; }
+    public bool EsLaberinto => NivelActual != null;
+    // Reto de la partida en curso (null = sin reto) y cuándo empezó, para el reloj del HUD
+    public InfoReto RetoActual { get; private set; }
+    public float InicioReto { get; private set; }
+
     // El rol no se guarda: se lee de la sala cada vez, así la única fuente es el servidor
     public string MiRol => SalaActual?.jugadores.Find(j => j.id == MiId)?.rol ?? "player";
     public bool SoyWizard => MiRol == "wizard";
+    public bool SoyDocente => MiPerfil != null && MiPerfil.docente;
 
     public event Action<Mensaje> AlRecibir;   // cualquier mensaje
     public event Action<string> AlError;      // errores legibles
@@ -187,10 +244,16 @@ public class ClienteRed : MonoBehaviour
     // ---------- Perfil (el servidor responde siempre con "perfil" o "error") ----------
     public void Registrar(string usuario, string nombre, string color) =>
         Enviar("{\"t\":\"registro\",\"usuario\":" + Json(usuario) + ",\"nombre\":" + Json(nombre) + ",\"color\":" + Json(color) + "}");
+    public void LoginDocente(string usuario, string contrasena) =>
+        Enviar("{\"t\":\"login_docente\",\"usuario\":" + Json(usuario) + ",\"contrasena\":" + Json(contrasena) + "}");
+    public void Espectar(string sala) => Enviar("{\"t\":\"espectar\",\"sala_id\":" + Json(sala) + "}");
     public void Login(string usuario) => Enviar("{\"t\":\"login\",\"usuario\":" + Json(usuario) + "}");
     public void EditarPerfil(string nombre, string color) =>
         Enviar("{\"t\":\"perfil_editar\",\"nombre\":" + Json(nombre) + ",\"color\":" + Json(color) + "}");
     public void VerPerfil() => Enviar("{\"t\":\"perfil_ver\"}");
+    public void UnirseClase(string codigo) => Enviar("{\"t\":\"unirse_clase\",\"codigo\":" + Json(codigo) + "}");
+    // Solo el anfitrión; 0 = sin reto. El servidor responde con "sala" (campo reto)
+    public void ElegirReto(int id) => Enviar("{\"t\":\"elegir_reto\",\"reto\":" + id + "}");
 
     // ---------- Acciones de lobby ----------
     public void ListarSalas() => Enviar("{\"t\":\"listar\"}");
@@ -198,15 +261,26 @@ public class ClienteRed : MonoBehaviour
     public void Unirse(string codigo) => Enviar($"{{\"t\":\"unirse\",\"sala_id\":{Json(codigo)}}}");
     public void SalirSala() => Enviar("{\"t\":\"salir\"}");
     public void MarcarListo(bool v) => Enviar($"{{\"t\":\"listo\",\"valor\":{(v ? "true" : "false")}}}");
-    public void IniciarPartida() => Enviar("{\"t\":\"iniciar\"}");
+    // El cliente SIEMPRE arranca el laberinto: el modo "agua" legado solo queda para
+    // los tests del servidor y el panel (decisión S4-1). No se expone en la UI.
+    public void IniciarPartida() => Enviar("{\"t\":\"iniciar\",\"modo\":\"laberinto\"}");
 
-    public void EnviarPosicion(Vector3 p, float rotY) =>
-        Enviar("{\"t\":\"pos\",\"x\":" + Num(p.x) + ",\"y\":" + Num(p.y) + ",\"z\":" + Num(p.z) + ",\"ry\":" + Num(rotY) + "}");
+    // pos lleva pitch (inclinación de la cabeza) para la primera persona (S4)
+    public void EnviarPosicion(Vector3 p, float rotY, float pitch = 0f) =>
+        Enviar("{\"t\":\"pos\",\"x\":" + Num(p.x) + ",\"y\":" + Num(p.y) + ",\"z\":" + Num(p.z) + ",\"ry\":" + Num(rotY) + ",\"pitch\":" + Num(pitch) + "}");
 
-    // ---------- Acciones de la misión (el servidor valida el rol) ----------
+    // ---------- Acciones de la misión legada (el servidor valida el rol) ----------
     public void Agarrar(string obj) => Enviar($"{{\"t\":\"agarrar\",\"obj\":{Json(obj)}}}");
     public void Senalar(string obj) => Enviar($"{{\"t\":\"senalar\",\"obj\":{Json(obj)}}}");
     public void Reiniciar() => Enviar("{\"t\":\"reiniciar\"}");
+
+    // ---------- Acciones del laberinto (el servidor valida lado y valores) ----------
+    public void Dial(string consola, float valor) =>
+        Enviar("{\"t\":\"dial\",\"consola\":" + Json(consola) + ",\"valor\":" + Num(valor) + "}");
+    public void Interactuar(string obj, string accion) =>
+        Enviar("{\"t\":\"interactuar\",\"obj\":" + Json(obj) + ",\"accion\":" + Json(accion) + "}");
+    public void Montacargas(string obj) => Enviar("{\"t\":\"montacargas\",\"obj\":" + Json(obj) + "}");
+    public void Palanca(string puerta) => Enviar("{\"t\":\"palanca\",\"puerta\":" + Json(puerta) + "}");
 
     public void Soltar(string obj, Vector3 p) =>
         Enviar("{\"t\":\"soltar\",\"obj\":" + Json(obj) + ",\"x\":" + Num(p.x) + ",\"y\":" + Num(p.y) + ",\"z\":" + Num(p.z) + "}");
@@ -234,9 +308,19 @@ public class ClienteRed : MonoBehaviour
                     MiId = m.perfil.id;
                     break;
                 case "sala": SalaActual = m.sala; break;
-                case "inicio": SalaActual = m.sala; MisionActual = m.mision; break;
-                case "fuera": SalaActual = null; MisionActual = null; break;
-                case "sala_cerrada": SalaActual = null; MisionActual = null; break;
+                case "espectando": SalaActual = m.sala; break;
+                case "inicio":
+                    SalaActual = m.sala; MisionActual = m.mision; NivelActual = m.nivel;
+                    SalaEstadoActual = m.nivel != null ? m.nivel.sala : null;
+                    RetoActual = m.sala != null && m.sala.reto != 0 ? m.sala.retos.Find(r => r.id == m.sala.reto) : null;
+                    InicioReto = Time.time;
+                    break;
+                case "sala_estado":
+                    m.salaEstado = JsonUtility.FromJson<InfoSalaEstado>(linea);
+                    SalaEstadoActual = m.salaEstado;
+                    break;
+                case "fuera": SalaActual = null; MisionActual = null; NivelActual = null; SalaEstadoActual = null; break;
+                case "sala_cerrada": SalaActual = null; MisionActual = null; NivelActual = null; SalaEstadoActual = null; break;
                 case "obj":
                     m.objeto = JsonUtility.FromJson<MsgObj>(linea).obj;
                     if (MisionActual != null)
@@ -281,6 +365,8 @@ public class ClienteRed : MonoBehaviour
         cliente = null;
         SalaActual = null;
         MisionActual = null;
+        NivelActual = null;
+        SalaEstadoActual = null;
         MiId = null;
         MiPerfil = null;
     }

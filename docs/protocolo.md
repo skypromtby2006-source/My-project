@@ -185,3 +185,54 @@ Las tablas se crean con `CREATE TABLE IF NOT EXISTS` al arrancar el servidor y n
 El perfil guarda **solo** usuario, nombre visible y color: los usuarios son estudiantes de secundaria, en su mayoría menores de edad (minimización de datos).
 
 Si la BD no está disponible (o en el Plan B2, sin Docker), el servidor sigue funcionando en memoria, **perfiles y progreso incluidos**, pero se pierden al cerrarlo; lo avisa con un `WARNING` al arrancar. En una demo en vivo no debe caerse todo por la base de datos.
+
+## Sprint 4 — Laberinto de las 5 puertas (servidor implementado en S4-1; cliente C# en S4-2)
+
+> Protocolo nuevo (SPRINT4 §3.2). **Implementado y testeado en server.py (S4-1).** El
+> cliente de primera persona lo consume en S4-2. La partida se arranca con
+> `{"t":"iniciar","modo":"laberinto"}`; sin `modo` (o `modo:"agua"`) sigue corriendo la
+> misión legada "Sintetizar agua", que se retira del todo en S4-5 junto con la migración
+> del panel a "errores por concepto" (§3.4). El servidor valida **todo**; el cliente solo
+> manda intenciones. El nivel y los números viven en `servidor/niveles/laberinto_01.json`
+> + `servidor/nivel.py`.
+
+Del cliente al servidor (durante la partida):
+
+| Mensaje | Significado |
+|---|---|
+| `{"t":"interactuar","obj":"valvula_naoh","accion":"abrir"}` | Usar un objeto del lado propio (válvula, montacargas, etc.) |
+| `{"t":"dial","consola":"dial_h2","valor":6}` | Fijar un dial (el servidor valida contra el sorteo) |
+| `{"t":"montacargas","obj":"nacl"}` | Pasar el producto por la ventanilla del muro central a la sala siguiente |
+| `{"t":"palanca","puerta":"D1"}` | Bajar la palanca del lado propio. La puerta abre solo si las dos bajan con < 2 s de diferencia |
+| `{"t":"pos","x":0,"y":0,"z":0,"ry":0,"pitch":0}` | `pos` agrega `pitch` (inclinación de la cabeza) para ver hacia dónde mira el otro |
+
+Del servidor al cliente:
+
+| Mensaje | Significado |
+|---|---|
+| `{"t":"sala_estado","sala":1,"puertas":{"D1":"abierta"},"objetos":{...},"mensaje":"..."}` | Estado de la sala tras cada intento válido |
+
+Eventos nuevos en la tabla `eventos` (para las estadísticas por concepto con pandas):
+
+- `error_estequiometria {sala, concepto, esperado, recibido, usuario}` — concepto ∈ {balanceo, mol, masa, limitante, rendimiento}.
+- `sala_completada {sala, segundos, errores}`.
+
+Progreso del perfil en el laberinto: **nivel completado**, mejor tiempo y tiempo por sala.
+
+## Revisión 20/11 — Rol docente: clases y retos
+
+Requieren sesión y una BD (PostgreSQL o SQLite); sin BD, `unirse_clase` responde `error`.
+
+| Cliente → Servidor | Campos | Para qué | Reglas |
+|---|---|---|---|
+| `unirse_clase` | `codigo` | Inscribirse en la clase de un docente | 8 caracteres (se toleran minúsculas y espacios). Responde `clase_unida` y un `perfil` con `clases`. Repetirlo no duplica la inscripción |
+| `elegir_reto` | `reto` (int, 0 = sin reto) | El anfitrión elige el reto antes de iniciar | Solo el host y con la sala esperando. El reto debe ser uno abierto de las clases del host. Todos reciben `sala` con el campo `reto` |
+
+| Servidor → Cliente | Campos | Cuándo |
+|---|---|---|
+| `clase_unida` | `nombre`, `docente` | Respuesta a `unirse_clase` |
+| `perfil` | + `clases`: lista de `{codigo, nombre, docente}` | Siempre (vacía sin clases o sin BD) |
+| `sala` | + `reto` (int, 0 = sin reto) y `retos`: lista de `{id, nombre, jugadores, tiempo_limite_s}` | Siempre. `retos` son los abiertos de las clases del anfitrión; 0 en `tiempo_limite_s` = sin límite |
+| `sala_estado` | + `tiempo_agotado` (bool) | Laberinto. Al vencer el tiempo del reto la partida deja de aceptar acciones (`error`) |
+
+Con reto, `iniciar` siempre arranca el laberinto con la **semilla del reto** (todos los grupos juegan los mismos números) y rechaza grupos con más jugadores que `jugadores_por_grupo`. Se guarda **un intento por jugador** (Wizard incluido) en la tabla `intentos`: completado al terminar el nivel; no completado si se agota el tiempo, si el jugador se va o si la sala se cierra a medias. Cada jugador se guarda una sola vez por partida.

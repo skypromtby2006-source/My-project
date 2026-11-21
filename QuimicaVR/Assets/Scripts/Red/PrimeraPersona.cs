@@ -1,0 +1,170 @@
+using UnityEngine;
+using UnityEngine.Rendering.Universal;
+
+// Jugador en primera persona (SPRINT4 §3.3): CharacterController + vista con el mouse
+// (cursor bloqueado; ESC libera y abre la pausa), WASD, E para interactuar por un
+// raycast desde el centro con una mira (+) y texto contextual. La entrada va por
+// IInteractor (EntradaTeclado hoy, EntradaXR en la fase de VR). El servidor valida
+// todo: acá solo se mandan intenciones (dial/palanca/montacargas/interactuar).
+public class PrimeraPersona : MonoBehaviour, IControlPartida
+{
+    public float velocidad = 4f;
+    public float alcance = 3f;
+
+    Camera cam;
+    CharacterController cc;
+    IInteractor entrada;
+    EntradaTeclado teclado;   // misma instancia que `entrada`, para la pausa
+    float pitch, vy, proximoEnvio;
+    bool pausa;
+    Interactuable apuntado;    // lo que la mira está señalando
+    Interactuable editando;    // consola que se está ajustando (greybox: campo de valor)
+    Vector3 empuje;            // solo pruebas: empuja al jugador sin teclado (ver FijarEmpuje)
+
+    // Solo para probar_build.py (PruebaAutomatica): empuja al jugador en una dirección
+    // del mundo, sin teclado, para comprobar que una puerta cerrada lo bloquea de verdad.
+    // En el juego normal nadie lo llama, así que no cambia nada.
+    public void FijarEmpuje(Vector3 dirMundo) => empuje = dirMundo;
+
+    // Solo pruebas: teletransporta al jugador a un punto del mundo (el CharacterController
+    // ignora colliders al moverlo directo, así que hay que apagarlo un instante). Se usa
+    // para dejarlo justo frente a una puerta antes de empujar contra ella.
+    public void ColocarPrueba(Vector3 pos)
+    {
+        cc.enabled = false;
+        transform.position = pos;
+        cc.enabled = true;
+    }
+
+    public static PrimeraPersona Crear(Vector3 pos, float sensibilidad)
+    {
+        var go = new GameObject("JugadorLocal");
+        go.transform.position = pos;
+        var cc = go.AddComponent<CharacterController>();
+        cc.height = 1.8f; cc.radius = .3f; cc.center = new Vector3(0, .9f, 0);
+
+        var camGo = new GameObject("CamaraPrimeraPersona");
+        camGo.transform.SetParent(go.transform, false);
+        camGo.transform.localPosition = new Vector3(0, 1.6f, 0);
+        var cam = camGo.AddComponent<Camera>();
+        camGo.AddComponent<AudioListener>();
+
+        var fp = go.AddComponent<PrimeraPersona>();
+        // Sin esto URP ignora el Volume del laberinto (tonemapping, bloom): la cámara se
+        // crea por código y el post-proceso viene apagado por defecto.
+        cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
+        fp.cam = cam;
+        fp.cc = cc;
+        fp.teclado = new EntradaTeclado(sensibilidad);
+        fp.entrada = fp.teclado;
+        fp.BloquearCursor(true);
+        return fp;
+    }
+
+    void BloquearCursor(bool bloquear)
+    {
+        Cursor.lockState = bloquear ? CursorLockMode.Locked : CursorLockMode.None;
+        Cursor.visible = !bloquear;
+    }
+
+    void Update()
+    {
+        if (entrada.Pausa()) Pausar(!pausa);
+
+        if (!pausa && editando == null)
+        {
+            var mir = entrada.Mirada();
+            transform.Rotate(0, mir.x, 0);
+            pitch = Mathf.Clamp(pitch - mir.y, -80f, 80f);
+            cam.transform.localEulerAngles = new Vector3(pitch, 0, 0);
+
+            var mv = Vector3.ClampMagnitude(entrada.Movimiento(), 1f);
+            var dir = transform.right * mv.x + transform.forward * mv.y;
+            if (cc.isGrounded && vy < 0) vy = -1f;
+            vy -= 9.8f * Time.deltaTime;
+            cc.Move((dir * velocidad + Vector3.up * vy) * Time.deltaTime);
+
+            Apuntar();
+            if (entrada.Activar() && apuntado != null) Interactuar(apuntado);
+        }
+
+        // Empuje de prueba (probar_build): se mueve con la MISMA física y el mismo
+        // CharacterController que el juego, así choca con el collider de la puerta.
+        if (empuje != Vector3.zero)
+        {
+            if (cc.isGrounded && vy < 0) vy = -1f;
+            vy -= 9.8f * Time.deltaTime;
+            cc.Move((empuje.normalized * velocidad + Vector3.up * vy) * Time.deltaTime);
+        }
+
+        if (Time.time >= proximoEnvio)
+        {
+            proximoEnvio = Time.time + 1f / 15f;
+            if (ClienteRed.I != null && ClienteRed.I.Conectado)
+                ClienteRed.I.EnviarPosicion(transform.position, transform.eulerAngles.y, pitch);
+        }
+    }
+
+    void Apuntar()
+    {
+        apuntado = null;
+        if (cam == null) return;
+        var rayo = cam.ScreenPointToRay(new Vector3(Screen.width / 2f, Screen.height / 2f, 0));
+        if (Physics.Raycast(rayo, out var hit, alcance))
+            apuntado = hit.collider.GetComponentInParent<Interactuable>();
+    }
+
+    void Interactuar(Interactuable it)
+    {
+        var red = ClienteRed.I;
+        if (it.lado != red.MiRol) return;   // es del otro lado: el servidor lo rechazaría igual
+        switch (it.clase)
+        {
+            case Interactuable.Clase.Palanca: red.Palanca(it.puertaId); break;
+            case Interactuable.Clase.Montacargas: red.Montacargas(it.id); break;
+            case Interactuable.Clase.Consola:
+                if (it.subtipo == "valvula") red.Interactuar(it.id, "abrir");
+                else if (it.subtipo == "lectura") { /* solo se lee en el HUD */ }
+                else { editando = it; BloquearCursor(false); }
+                break;
+        }
+    }
+
+    // ---------------- Estado para el HUD (UI-3: lo dibuja PantallaHud con UI Toolkit) ----------------
+    public bool EnPausa => pausa;
+    public float Sensibilidad { get => teclado.sensibilidad; set => teclado.sensibilidad = value; }
+    public void Pausar(bool p) { pausa = p; editando = null; BloquearCursor(!p); }
+
+    // Consola de valor abierta (o null) y lo que dice la mira
+    public Interactuable Editando => editando;
+    public string Pista => apuntado == null || editando != null ? ""
+        : apuntado.lado == ClienteRed.I.MiRol ? apuntado.Pista() : $"{apuntado.id} (del otro lado)";
+
+    public void EnviarValor(string texto)
+    {
+        if (editando != null && float.TryParse(texto, System.Globalization.NumberStyles.Float,
+                                               System.Globalization.CultureInfo.InvariantCulture, out var v))
+            ClienteRed.I.Dial(editando.id, v);
+        CancelarEdicion();
+    }
+
+    public void CancelarEdicion() { editando = null; BloquearCursor(!pausa); }
+
+    // Números visibles de la sala según el concepto (lo que cada lado necesita leer).
+    public static string Numeros(InfoSalaEstado e)
+    {
+        var d = e.datos;
+        if (d == null) return "";
+        switch (e.concepto)
+        {
+            case "balanceo":
+                string coef = d.coeficientes != null ? $"{d.coeficientes.H2}H2 + {d.coeficientes.O2}O2 → {d.coeficientes.H2O}H2O" : "";
+                return $"La puerta pide {d.pide_h2o_mol} mol de H2O   [{coef}]";
+            case "mol": return $"Llegó {d.agua_mol} mol de agua";
+            case "masa": return $"NaOH: {d.naoh_mol} mol   ·   HCl: {d.hcl_g} g";
+            case "limitante": return $"H2 disponible: {d.h2_mol} mol";
+            case "rendimiento": return $"Teórica: {d.teorica_g} g   ·   Horno (real): {d.real_g} g";
+            default: return "";
+        }
+    }
+}

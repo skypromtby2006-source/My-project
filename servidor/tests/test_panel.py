@@ -9,7 +9,7 @@ import uvicorn
 import websockets
 
 import server
-from conftest import ADMIN, CLAVE
+from conftest import ADMIN, CLAVE, esperar, misiones
 
 RUTAS_PROTEGIDAS = [
     ("get", "/api/estado"), ("get", "/api/salas"), ("post", "/api/salas/ABCD/cerrar"),
@@ -64,7 +64,7 @@ async def test_token_de_otro_secreto_no_vale(api):
 
 
 # ----------------------------------------------------------------- estado y salas en vivo
-async def test_estado_y_salas_muestran_lo_que_pasa_en_el_juego(api, h, servidor_juego, bot):
+async def test_estado_y_salas_muestran_lo_que_pasa_en_el_juego(api, h, servidor_juego, bot, motor):
     a = await bot(servidor_juego, "ana_test", nombre="Ana")
     b = await bot(servidor_juego, "beto_test", nombre="Beto")
     await a.env(t="crear_sala", nombre_sala="Química 1", maximo=4)
@@ -74,7 +74,7 @@ async def test_estado_y_salas_muestran_lo_que_pasa_en_el_juego(api, h, servidor_
 
     e = (await api.get("/api/estado", headers=h)).json()
     assert e["conectados"] == 2 and e["con_sesion"] == 2 and e["salas"] == 1
-    assert e["partidas_en_curso"] == 0 and e["modo_bd"] is False
+    assert e["partidas_en_curso"] == 0 and e["modo_bd"] is (motor != "memoria")
     assert {j["usuario"] for j in e["jugadores"]} == {"ana_test", "beto_test"}
 
     salas = (await api.get("/api/salas", headers=h)).json()
@@ -146,7 +146,7 @@ async def jugar_mision(a, b):
     sala = (await a.rec("sala"))["sala"]
     await b.env(t="unirse", sala_id=sala["id"])
     await b.rec("sala")
-    await b.env(t="listo", valor=True)
+    await b.listo(a)
     await a.env(t="iniciar")
     inicio = await b.rec("inicio")
     objetos = {o["elemento"]: [] for o in inicio["mision"]["objetos"]}
@@ -158,6 +158,11 @@ async def jugar_mision(a, b):
         await b.rec("obj")
         await b.env(t="soltar", obj=obj, x=0, y=0.5, z=4)  # dentro del reactor
         await b.rec("estado")
+
+    # Con BD, el progreso se guarda después de avisar "estado": se espera a que esté
+    async def guardada():
+        return len(await misiones()) == 1
+    await esperar(guardada)
     return sala["id"]
 
 
@@ -314,3 +319,19 @@ async def test_bloquear_impide_el_login_y_expulsa_si_esta_conectado(api, h, serv
     assert filas[1]["detalle"] == {"motivo": "Insultos en el chat", "expulsado": True}
     assert (await api.post("/api/usuarios/nadie/bloquear", headers=h, json={"motivo": "x"})).status_code == 404
     assert (await api.post("/api/usuarios/ana_test/bloquear", headers=h, json={"motivo": ""})).status_code == 422
+
+
+# ----------------------------------------------------------------- basura binaria en el puerto del juego
+async def test_bytes_binarios_no_tumban_al_servidor(servidor_juego, bot, caplog):
+    # Un navegador o un escáner de puertos manda bytes que no son UTF-8 ni JSON.
+    r, w = await asyncio.open_connection("127.0.0.1", servidor_juego)
+    w.write(b"\xff\xfe\x00\x01GET / HTTP/1.1\x80\x81\n")
+    await w.drain()
+    with caplog.at_level(logging.WARNING):
+        # El servidor cierra esa conexión: readline() devuelve vacío.
+        assert await asyncio.wait_for(r.readline(), 3) == b""
+    w.close()
+    assert any("Datos no válidos desde" in m for m in caplog.messages)
+    # Y sigue vivo: un jugador legítimo entra normal después de la basura.
+    a = await bot(servidor_juego, "ana_test", nombre="Ana")
+    assert a.id

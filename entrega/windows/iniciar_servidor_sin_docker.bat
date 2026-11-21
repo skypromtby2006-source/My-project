@@ -1,9 +1,9 @@
 @echo off
-title Servidor Quimica - Sin Docker (Plan B2)
+title Servidor Quimica - Sin Docker (Plan C)
 cd /d "%~dp0"
 echo ==================================================
 echo   Servidor multijugador - Juego de Quimica (demo)
-echo   Plan B2: Python directo, sin Docker ni base de datos
+echo   Plan C: Python directo, sin Docker. Datos en SQLite
 echo ==================================================
 echo.
 
@@ -33,6 +33,10 @@ if errorlevel 1 (
 )
 for /f "delims=" %%v in ('%PY% --version 2^>^&1') do echo [1/3] %%v encontrado.
 
+REM Plan C: para cuando QuimicaServidor.exe no se puede usar (p. ej. un antivirus
+REM lo bloquea: los .exe de PyInstaller suelen dar falsos positivos). Es el mismo
+REM servidor, corrido con el Python de la PC.
+
 REM El venv se crea una sola vez en Servidor\.venv: asi no se instala nada en
 REM el Python del sistema, y para desinstalar basta con borrar la carpeta.
 if exist ".venv\Scripts\python.exe" goto venv_ok
@@ -50,15 +54,15 @@ if exist ".venv\instalado.txt" goto pip_ok
 echo [2/3] Instalando dependencias (necesita internet)...
 ".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q -r servidor\requirements.txt
 if errorlevel 1 (
-  REM No es fatal: requirements.txt solo trae asyncpg, que se usa con la base
-  REM de datos. Sin DATABASE_URL, server.py ni lo importa.
-  echo [!] Fallo pip install. Se sigue igual: sin base de datos no hace falta.
+  REM No es fatal: el juego y SQLite solo usan la biblioteca estandar de Python.
+  REM Lo que falte (fastapi, pandas) deja deshabilitado el panel web, no el juego.
+  echo [!] Fallo pip install. El juego funciona igual; el panel web puede quedar deshabilitado.
   goto pip_ok
 )
 echo ok> ".venv\instalado.txt"
 :pip_ok
 
-REM Se vacia por si la PC tiene la variable definida: el Plan B2 corre sin BD
+REM Se vacia por si la PC tiene la variable definida: el Plan C usa SQLite, no PostgreSQL
 set "DATABASE_URL="
 
 echo.
@@ -68,8 +72,9 @@ echo  - En esta PC conecta a:   127.0.0.1
 echo  - Desde otra PC de la red usa alguna de estas IP:
 for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do echo        %%a
 echo.
-echo  Sin base de datos: los perfiles y el progreso se pierden al cerrar
-echo  esta ventana. Si Windows pregunta por el firewall, elige "Permitir".
+echo  Los perfiles y el progreso se guardan en servidor\quimica.db.
+echo  Panel web: http://localhost:8000 (contrasena en el .env de esta carpeta).
+echo  Si Windows pregunta por el firewall, elige "Permitir".
 echo  Para apagar el servidor: cierra esta ventana o pulsa Ctrl+C.
 echo ==================================================
 echo.

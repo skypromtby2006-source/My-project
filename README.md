@@ -30,9 +30,14 @@ Requisitos: Docker con Compose (sin `sudo`), Python 3 y Unity `6000.3.27f1` con 
 | `scripts/pgadmin.sh` | Levanta pgAdmin en http://127.0.0.1:5050 para revisar la BD (ver abajo) |
 | `scripts/probar_servidor.sh` | Prueba de 2 jugadores simulados, sin Unity → `TODO OK ✔` |
 | `scripts/probar_build.sh [escenario…]` | Prueba el **build real** de Linux sin ventana contra el servidor de Docker (Wizard/Player entre partidas, salidas de sala, sesión única, reconexión, progreso) → `TODO OK ✔`. Los escenarios `reinicio` y `progreso` reinician el servidor |
+| `scripts/sembrar_demo.py [quimica.db]` · `scripts/limpiar_demo.py` | Datos de demo de la presentación (docente_demo, "Química 5to A", un reto con semilla fija y 4 estudiantes `*_demo` con intentos). Idempotente; limpiar borra solo la demo. En Windows: `Servidor\sembrar_demo.bat` / `limpiar_demo.bat` |
+| `scripts/capturas_panel.py [carpeta]` | Capturas del panel (login, admin y docente) con los datos de demo, con Firefox headless → `docs/presentacion/capturas/panel/` |
 | `scripts/panel_dev.sh` | Panel en modo desarrollo (Vite en http://localhost:5173, recarga al guardar), contra el servidor en :8000 |
 | `scripts/jugar_linux.sh [N]` | Abre N instancias del build de Linux (logs en `logs/`) |
-| `scripts/empaquetar.sh [versión]` | Genera `dist/QuimicaDemo_Windows_<versión>.zip` |
+| `scripts/probar_tests.sh` | pytest del servidor contra memoria, SQLite y PostgreSQL (levanta un PostgreSQL descartable) |
+| `scripts/empaquetar.sh [versión] [--sin-exe]` | Genera `dist/QuimicaDemo_Windows_<versión>.zip` (juego + servidor local `.exe` + servidor dedicado Docker). Toma el `.exe` de `dist/QuimicaServidor/` |
+| `scripts/publicar_release.sh <tag>` | Entrega en un comando: baja el `.exe` del Release del tag, `empaquetar.sh`, `probar_paquete.sh docker` y sube el zip completo al Release |
+| `scripts/probar_paquete.sh <zip> [docker\|exe]` | Prueba de humo: descomprime el zip en una carpeta temporal, arranca cada servidor **desde ahí**, corre `probar_cliente` y entra al panel → `PAQUETE OK ✔` |
 
 Los scripts funcionan desde cualquier carpeta del repo.
 
@@ -59,11 +64,14 @@ scripts/servidor_eventos.sh
 
 1. Copiar `.env.example` como `.env` en la raíz del repo y poner `ADMIN_PASSWORD` y `JWT_SECRET`. El `.env` **no se sube a git**. Sin `ADMIN_PASSWORD`, el panel arranca deshabilitado y lo avisa en el log: nunca se usa una contraseña por defecto.
 2. `scripts/servidor_iniciar.sh` y abrir **http://localhost:8000**, o `http://<IP-de-la-PC>:8000` desde otro equipo o un celular de la misma red.
-3. Tests de la API (sin Docker):
+3. Tests del servidor y de la API, contra los **tres motores** (memoria, SQLite y PostgreSQL):
    ```bash
    python -m venv .venv && .venv/bin/pip install -r servidor/requirements-dev.txt
-   cd servidor && ../.venv/bin/python -m pytest
+   scripts/probar_tests.sh          # levanta un PostgreSQL descartable con Docker, corre pytest y lo apaga
    ```
+   Al final se ve `resultado por motor` con "N passed, 0 skipped" para cada uno. Sin Docker:
+   `cd servidor && ../.venv/bin/python -m pytest --motores=memoria,sqlite` (sin esa opción, los tests de
+   postgres **fallan** en vez de saltearse, para que nunca se dé por probado un motor que no se probó).
 
 El juego no depende del panel: si faltan las dependencias, la contraseña o el puerto 8000, el servidor del juego arranca igual. Las rutas de la API están en `MDs/SPRINT3.md` §2.4 y el guion de prueba en `docs/pruebas/s3-integral.md`.
 
@@ -78,14 +86,27 @@ Panel web para inspeccionar PostgreSQL. Está en el perfil `admin` del compose, 
 
 ## Windows (entrega)
 
-Descomprime `QuimicaDemo_Windows_v0.2.zip` y sigue su `LEEME.txt`:
+Descomprime `QuimicaDemo_Windows_<versión>.zip` y sigue su `LEEME.txt`, que son dos pasos:
 
-1. Instala **Docker Desktop** y espera a que diga *Engine running*.
-2. `Servidor\instalar_servidor.bat`: levanta el servidor y muestra las IP.
-3. Abre `Juego\QuimicaDemo.exe` dos veces y conecta a `127.0.0.1`.
+1. `Servidor\QuimicaServidor.exe`: el **servidor local** (sin instalar nada). Muestra las IP, abre el panel y guarda los datos en `Servidor\quimica.db` (SQLite). Sin `.env`, inventa la contraseña del panel y la deja en `Servidor\admin.txt`.
+2. Abre `Juego\QuimicaDemo.exe` dos veces y conecta a `127.0.0.1`.
 
-Si otra PC de la red no puede conectar, ejecuta `Servidor\abrir_firewall.bat` como administrador.
-Para ver la BD en el navegador: `Servidor\abrir_pgadmin.bat` (ver la sección pgAdmin).
+Si un antivirus bloquea el `.exe` (falso positivo frecuente de PyInstaller), el **plan C** es `ServidorDedicado\iniciar_servidor_sin_docker.bat`: el mismo servidor con el Python de la PC, datos en SQLite. El zip va en Documentos o el Escritorio: en una carpeta sin permiso de escritura (Archivos de programa) el `.exe` avisa y no arranca.
+
+`ServidorDedicado\` trae la opción con **Docker + PostgreSQL** para un aula entera (`instalar_servidor.bat`, pgAdmin, logs). Ver `docs/decisiones.md` (Sprint 4) para cuándo usar cada uno.
+
+**Publicar una versión (el domingo):**
+```bash
+git tag v0.5-demo && git push origin v0.5-demo   # Actions construye y prueba el .exe y crea el Release
+scripts/publicar_release.sh v0.5-demo            # cuando el run termine: arma, prueba y sube el zip completo
+```
+Para probar el paso del Release sin publicar nada: `gh workflow run servidor-exe.yml --ref sprint-4 -f borrador=true` (crea un *draft*, que no crea tag; se borra con `gh release delete <nombre> --yes`).
+
+**De dónde sale el `.exe`:** GitHub Actions lo construye en Windows (`.github/workflows/servidor-exe.yml`) en cada tag `v*` y en cada push a `sprint-4` que toque `servidor/` o `panel/`, y le corre `probar_paquete.sh`. Para armar el zip de entrega:
+```bash
+gh run download -R skypromtby2006-source/My-project -n QuimicaServidor_Windows -D dist/   # el último run
+scripts/empaquetar.sh v0.5 && scripts/probar_paquete.sh dist/QuimicaDemo_Windows_v0.5.zip docker
+```
 
 ## Estructura
 

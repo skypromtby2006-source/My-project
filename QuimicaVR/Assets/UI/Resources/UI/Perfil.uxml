@@ -1,0 +1,66 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <!-- No está en el diseño: se arma con el mismo estilo (SPRINT_UI §3). Tarjeta del
+         perfil (el usuario no se edita) y, al lado, la del progreso con el historial. -->
+    <Style src="Estilos.uss" />
+    <ui:VisualElement name="perfil" class="pantalla g28">
+        <ui:VisualElement class="row entre">
+            <ui:Label text="Mi perfil" class="h1-sm" />
+            <ui:VisualElement name="chip-perfil" class="chip-perfil" />
+        </ui:VisualElement>
+
+        <ui:VisualElement class="row estirar g28 grow">
+            <ui:VisualElement name="tarjeta" class="card col-perfil g16">
+                <ui:VisualElement>
+                    <ui:Label text="Usuario" class="lbl" />
+                    <ui:Label name="usuario" class="inp-fijo" />
+                </ui:VisualElement>
+                <ui:VisualElement>
+                    <ui:Label text="Nombre visible" class="lbl" />
+                    <ui:TextField name="nombre" max-length="20" class="inp" />
+                </ui:VisualElement>
+                <ui:VisualElement>
+                    <ui:Label text="Color" class="lbl" />
+                    <ui:VisualElement name="colores" class="row g8" />
+                </ui:VisualElement>
+                <ui:VisualElement>
+                    <ui:Label text="Mis clases" class="lbl" />
+                    <ui:Label name="clases" class="parrafo" />
+                    <ui:VisualElement class="row g8">
+                        <ui:TextField name="codigo-clase" max-length="9" class="inp grow" />
+                        <ui:Button name="unirse-clase" text="Unirse a clase" class="btn sec" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:Label name="aviso" class="chip warn" />
+                <ui:Label name="info" class="chip ok" />
+                <ui:VisualElement class="grow" />
+                <ui:VisualElement class="row g14">
+                    <ui:Button name="volver" text="Volver" class="btn sec grow" />
+                    <ui:Button name="guardar" text="Guardar" class="btn grow" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="card grow g16">
+                <ui:Label text="Progreso" class="h2" />
+                <ui:VisualElement class="row estirar g14">
+                    <ui:VisualElement class="card-interna grow">
+                        <ui:Label text="Niveles completados" class="lbl" />
+                        <ui:Label name="completadas" class="dato-lg" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="card-interna grow">
+                        <ui:Label text="Mejor tiempo" class="lbl" />
+                        <ui:Label name="mejor" class="dato-lg" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="card-interna grow">
+                        <ui:Label text="Errores cometidos (todas las partidas)" class="lbl" />
+                        <ui:Label name="errores" class="dato-lg" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement>
+                    <ui:Label text="Últimas 5 partidas completadas" class="lbl" />
+                    <ui:VisualElement name="historial" />
+                    <ui:Label name="sin-historial" text="Todavía no completaste ninguna." class="parrafo vacia" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

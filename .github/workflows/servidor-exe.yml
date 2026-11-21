@@ -1,0 +1,93 @@
+# Construye el servidor local (QuimicaServidor.exe, PyInstaller en modo carpeta) en
+# Windows, lo prueba desde el zip con scripts/probar_paquete.sh y lo sube como artefacto.
+# El juego NO se construye aquí: se sigue construyendo con Unity en Arch.
+#
+# En cada tag v* además crea (o actualiza) el GitHub Release del tag con el zip del
+# servidor. El zip de entrega completo (con el juego, que no se construye aquí) se
+# agrega después desde Arch:  gh release upload <tag> dist/QuimicaDemo_Windows_<tag>.zip
+#
+# Descargar el resultado:  gh run download -R skypromtby2006-source/My-project -n QuimicaServidor_Windows -D dist/
+#   -> deja dist/QuimicaServidor/QuimicaServidor.exe, que es lo que usa scripts/empaquetar.sh
+name: Servidor local (.exe)
+
+on:
+  push:
+    tags: ["v*"]                 # cada versión (los filtros de paths no aplican a los tags)
+    branches: ["sprint-4"]       # y mientras se desarrolla, cuando cambia el servidor o el panel
+    paths:
+      - "servidor/**"
+      - "panel/**"
+      - "scripts/probar_paquete.sh"
+      - ".github/workflows/servidor-exe.yml"
+  workflow_dispatch:
+    inputs:
+      borrador:
+        description: "Crear un Release BORRADOR (draft) con el zip del servidor, para probar el paso del Release sin tags"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # para crear el Release en los tags
+
+jobs:
+  exe:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: panel/package-lock.json
+      - name: Compilar el panel (panel/dist va dentro del .exe)
+        run: cd panel && npm ci --no-audit --no-fund && npm run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"   # la misma que la imagen de Docker
+          cache: pip
+          cache-dependency-path: servidor/requirements*.txt
+      - name: Instalar dependencias
+        run: python -m pip install -r servidor/requirements-exe.txt
+
+      - name: PyInstaller
+        run: pyinstaller servidor/quimica_servidor.spec --noconfirm --distpath dist --workpath build_pyi
+
+      - name: Prueba de humo desde el zip (probar_paquete.sh exe)
+        run: |
+          cd dist && python -m zipfile -c ../QuimicaServidor_Windows.zip QuimicaServidor && cd ..
+          scripts/probar_paquete.sh QuimicaServidor_Windows.zip exe
+
+      # En tags v* (Release público) o a mano con borrador=true (draft: no se publica ni
+      # crea el tag). Solo si la prueba de humo pasó: los pasos anteriores cortan el job.
+      - name: GitHub Release con el zip del servidor
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.borrador)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BORRADOR: ${{ github.event_name == 'workflow_dispatch' && inputs.borrador }}
+        run: |
+          if [ "$BORRADOR" = true ]; then
+            # Un draft no crea el tag en git (recién al publicarlo): no quedan tags descartables
+            TAG="borrador-${GITHUB_RUN_ID}"; OPCIONES=(--draft --target "$GITHUB_SHA" --title "[borrador] $TAG")
+          else
+            TAG="$GITHUB_REF_NAME"; OPCIONES=(--verify-tag --title "$TAG")
+          fi
+          ZIP="QuimicaServidor_Windows_${TAG}.zip"
+          mv QuimicaServidor_Windows.zip "$ZIP"
+          # Si el Release ya existe (un re-run, o creado a mano), solo se reemplaza el zip
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" "${OPCIONES[@]}" \
+            --notes "Servidor local para Windows (QuimicaServidor.exe). Descomprimir en Documentos o en el Escritorio y abrir QuimicaServidor.exe. Probado desde el zip con scripts/probar_paquete.sh en windows-latest."
+          gh release upload "$TAG" "$ZIP" --clobber
+          echo "Release: $TAG"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QuimicaServidor_Windows
+          path: dist/                # dentro: QuimicaServidor/QuimicaServidor.exe + _internal/
+          if-no-files-found: error
+          retention-days: 90

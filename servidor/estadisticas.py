@@ -6,27 +6,26 @@ pandas para el "análisis de errores frecuentes" que justifica el perfil de
 investigación (MDs/SPRINT3.md §1). Además funciona igual con y sin base de datos:
 los datos se cargan en un DataFrame y desde ahí el cálculo es el mismo.
 """
+import asyncio
 import json
 
 import pandas as pd
 
 
-async def cargar(juego) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Devuelve (errores, misiones) como DataFrames, vengan de PostgreSQL o de la memoria."""
+async def cargar(juego) -> tuple[list[dict], list[dict]]:
+    """Devuelve (errores, misiones) tal como vienen: de la BD (con `detalle` todavía en
+    texto JSON) o de la memoria (con `detalle` ya como dict)."""
     if juego.db is None:
-        errores = [{**e["detalle"], "fecha": e["fecha"]} for e in juego.eventos_mem if e["tipo"] == "reaccion_fallida"]
-        misiones = list(juego.misiones_mem)
-    else:
-        async with juego.db.acquire() as c:
-            errores = [{**json.loads(f["detalle"]), "fecha": f["fecha"]} for f in await c.fetch(
-                # Solo usuarios que existen: hay eventos de pruebas viejas con un usuario que
-                # ya no está, y su enlace en el panel llevaría a una página vacía
-                "SELECT detalle, fecha FROM eventos WHERE tipo = 'reaccion_fallida' "
-                "AND detalle->>'usuario' IN (SELECT usuario FROM usuarios)")]
-            misiones = [dict(f) for f in await c.fetch(
-                "SELECT u.usuario, m.mision, m.duracion_s, m.errores, m.fecha "
-                "FROM misiones_completadas m JOIN usuarios u ON u.id = m.usuario_id")]
-    df_err = pd.DataFrame(errores, columns=["usuario", "recibido", "esperado", "fecha"])
+        errores = [{"detalle": e["detalle"], "fecha": e["fecha"]}
+                   for e in juego.eventos_mem if e["tipo"] == "reaccion_fallida"]
+        return errores, list(juego.misiones_mem)
+    return await juego.db.datos_estadisticas()
+
+
+def a_dataframes(errores: list[dict], misiones: list[dict]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    filas_err = [{**(json.loads(e["detalle"]) if isinstance(e["detalle"], str) else e["detalle"]),
+                  "fecha": e["fecha"]} for e in errores]
+    df_err = pd.DataFrame(filas_err, columns=["usuario", "recibido", "esperado", "fecha"])
     df_mis = pd.DataFrame(misiones, columns=["usuario", "mision", "duracion_s", "errores", "fecha"])
     return df_err, df_mis
 
@@ -81,6 +80,12 @@ def calcular(df_err: pd.DataFrame, df_mis: pd.DataFrame) -> dict:
     }
 
 
+def procesar(errores: list[dict], misiones: list[dict]) -> dict:
+    return calcular(*a_dataframes(errores, misiones))
+
+
 async def obtener(juego) -> dict:
-    df_err, df_mis = await cargar(juego)
-    return calcular(df_err, df_mis)
+    errores, misiones = await cargar(juego)
+    # Decodificar el JSON y calcular con pandas es CPU puro: con muchos eventos tarda.
+    # En un hilo, el event loop sigue atendiendo a los jugadores mientras tanto.
+    return await asyncio.to_thread(procesar, errores, misiones)

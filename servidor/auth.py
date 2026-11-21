@@ -2,6 +2,7 @@
 Login del administrador del panel: credenciales del .env, token JWT y límite de intentos.
 """
 import collections
+import hashlib
 import logging
 import os
 import pathlib
@@ -35,6 +36,38 @@ def cargar_env():
             os.environ.setdefault(clave.strip(), valor.strip().strip('"').strip("'"))
         log.info("Configuración del panel leída de %s", ruta)
         return
+
+
+# ----------------------------------------------------------------- contraseñas de docentes
+# scrypt de la biblioteca estándar (sin dependencias nuevas). Es lento A PROPÓSITO y usa
+# memoria: probar millones de contraseñas contra un hash robado sale caro. n=2^14, r=8,
+# p=1 son los parámetros recomendados para logins interactivos (~50 ms y 16 MB).
+SCRYPT_N, SCRYPT_R, SCRYPT_P = 2 ** 14, 8, 1
+
+
+def contrasena_al_azar(largo: int = 12) -> str:
+    """Letras y números sin los que se confunden al copiarlos a mano (0/O, 1/l/I): el
+    docente la lee en la ventana y la escribe en el navegador."""
+    alfabeto = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    return "".join(secrets.choice(alfabeto) for _ in range(largo))
+
+
+def hash_contrasena(contrasena: str) -> str:
+    """'scrypt$n$r$p$sal$hash' en hex. La sal es aleatoria por docente: dos docentes con
+    la misma contraseña tienen hashes distintos."""
+    sal = secrets.token_bytes(16)
+    h = hashlib.scrypt(contrasena.encode(), salt=sal, n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P, dklen=32)
+    return f"scrypt${SCRYPT_N}${SCRYPT_R}${SCRYPT_P}${sal.hex()}${h.hex()}"
+
+
+def verificar_contrasena(contrasena: str, guardado: str) -> bool:
+    try:
+        _, n, r, p, sal, h = guardado.split("$")
+        calc = hashlib.scrypt(contrasena.encode(), salt=bytes.fromhex(sal), n=int(n), r=int(r),
+                              p=int(p), dklen=len(h) // 2)
+    except (ValueError, TypeError):
+        return False
+    return secrets.compare_digest(calc.hex(), h)
 
 
 class Autenticador:
@@ -78,14 +111,26 @@ class Autenticador:
         ok_contrasena = secrets.compare_digest(contrasena.encode(), self.contrasena.encode())
         return ok_usuario & ok_contrasena
 
-    def emitir_token(self, usuario: str) -> str:
+    def emitir_token(self, usuario: str, rol: str = "admin", docente_id: int | None = None) -> str:
+        # El rol va dentro del JWT (firmado): el panel lo lee para armar el menú y la API
+        # lo vuelve a validar en cada ruta. Cambiarlo en el navegador invalida la firma.
         ahora = int(time.time())
-        return jwt.encode({"sub": usuario, "iat": ahora, "exp": ahora + DURACION_TOKEN_S},
-                          self.secreto, algorithm=ALGORITMO)
+        datos = {"sub": usuario, "rol": rol, "iat": ahora, "exp": ahora + DURACION_TOKEN_S}
+        if docente_id is not None:
+            datos["did"] = docente_id
+        return jwt.encode(datos, self.secreto, algorithm=ALGORITMO)
 
-    def validar_token(self, token: str) -> str | None:
-        """Devuelve el usuario admin o None si el token es inválido o venció."""
+    def leer_token(self, token: str) -> dict | None:
+        """{"sub", "rol", "did"?} o None si el token es inválido o venció. Un token sin
+        rol (emitido antes de la revisión) es de admin: era el único rol que existía."""
         try:
-            return jwt.decode(token, self.secreto, algorithms=[ALGORITMO])["sub"]
+            datos = jwt.decode(token, self.secreto, algorithms=[ALGORITMO])
         except jwt.PyJWTError:
             return None
+        datos.setdefault("rol", "admin")
+        return datos
+
+    def validar_token(self, token: str) -> str | None:
+        """El usuario si el token es de ADMIN; None si es inválido, venció o es de docente."""
+        datos = self.leer_token(token)
+        return datos["sub"] if datos and datos["rol"] == "admin" else None

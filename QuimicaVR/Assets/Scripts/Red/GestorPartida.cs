@@ -20,13 +20,26 @@ public class GestorPartida : MonoBehaviour
     float proximoEnvio;
     Camera cam;
 
-    class Remoto { public GameObject go; public Vector3 destino; public float rotY; }
+    // Laberinto (S4): el cliente siempre arranca en este modo. El de agua queda abajo
+    // solo por si un servidor viejo manda "inicio" con misión (y para los tests).
+    GeneradorNivel generador;
+    PrimeraPersona primeraPersona;
+    bool laberinto;
+    GameObject camaraVieja;   // la cámara de tercera persona, apagada en primera persona
+
+    class Remoto { public GameObject go; public Vector3 destino; public float rotY; public float pitch; public Transform cabeza; }
 
     // Solo lectura, para el reporte de PruebaAutomatica: es lo que el jugador ve en pantalla
     public bool HayEscena => escena != null;
     public Vector3? PosicionLocal => jugadorLocal != null ? jugadorLocal.transform.position : (Vector3?)null;
     public IEnumerable<string> IdsRemotos => remotos.Keys;
     public Vector3 DestinoRemoto(string id) => remotos[id].destino;
+    public PrimeraPersona JugadorLocal => primeraPersona;
+    CamaraLibre espectador;                                  // docente: cámara libre, sin cuerpo
+    public bool HayEspectador => espectador != null;
+    // El que controla la cámara: el jugador en primera persona o la cámara del docente (para el HUD)
+    public IControlPartida Control => primeraPersona != null ? primeraPersona : espectador != null ? espectador : (IControlPartida)null;   // laberinto: para el empuje de prueba
+    public GeneradorNivel Generador => generador;           // laberinto: para las capturas de prueba
 
     class Esfera
     {
@@ -49,13 +62,21 @@ public class GestorPartida : MonoBehaviour
 
     void Start()
     {
+        gameObject.AddComponent<Depuracion>();   // F3: FPS y etiquetas de depuración (S4-4)
         cam = Camera.main;
         var red = ClienteRed.I;
         red.AlRecibir += m =>
         {
             switch (m.t)
             {
-                case "inicio": Comenzar(m.sala, m.mision, m.apariciones); break;
+                case "inicio":
+                    if (m.nivel != null) ComenzarLaberinto(m.sala, m.nivel);
+                    else Comenzar(m.sala, m.mision, m.apariciones);
+                    break;
+                case "sala_estado":
+                    var se = ClienteRed.I.SalaEstadoActual;
+                    if (generador != null && se != null) generador.AbrirHasta(se.sala, se.completada_nivel);
+                    break;
                 case "pos": MoverRemoto(m); break;
                 case "salio": Quitar(m.id); break;
                 // Al volver al lobby se borra la partida. Antes quedaba viva detrás del menú
@@ -170,8 +191,9 @@ public class GestorPartida : MonoBehaviour
         go.transform.position = pos;
         Pintar(go, color);
 
-        // "nariz" para ver hacia dónde mira
+        // "cabeza/nariz" para ver hacia dónde mira; en el laberinto gira con el pitch del otro
         var nariz = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        nariz.name = "Cabeza";
         nariz.transform.SetParent(go.transform, false);
         nariz.transform.localPosition = new Vector3(0, .4f, .5f);
         nariz.transform.localScale = Vector3.one * .25f;
@@ -240,6 +262,64 @@ public class GestorPartida : MonoBehaviour
         if (!remotos.TryGetValue(m.id, out var r)) return;
         r.destino = new Vector3(m.x, m.y, m.z);
         r.rotY = m.ry;
+        r.pitch = m.pitch;
+    }
+
+    // Arranca el laberinto: construye el nivel greybox desde el dato del servidor,
+    // pone al jugador local en primera persona y a los demás como cápsulas.
+    void ComenzarLaberinto(InfoSala sala, InfoNivel nivel)
+    {
+        Terminar();
+        laberinto = true;
+        escena = new GameObject("Escena");
+        salaDeLaEscena = sala.id;
+
+        generador = new GeneradorNivel();
+        generador.Construir(nivel, escena.transform);
+
+        camaraVieja = Camera.main != null ? Camera.main.gameObject : null;
+        if (camaraVieja != null) camaraVieja.SetActive(false);
+
+        foreach (var j in sala.jugadores)
+        {
+            string lado = j.id == sala.host ? "wizard" : "player";
+            var pos = generador.AparicionMundo(lado);
+            if (j.id == ClienteRed.I.MiId)
+            {
+                primeraPersona = PrimeraPersona.Crear(pos, 2f);
+                primeraPersona.transform.SetParent(escena.transform);
+                jugadorLocal = primeraPersona.gameObject;
+            }
+            else
+            {
+                if (!ColorUtility.TryParseHtmlString(j.color, out var color)) color = Color.white;
+                var go = Crear(j.nombre, color, pos);
+                remotos[j.id] = new Remoto { go = go, destino = pos, cabeza = go.transform.Find("Cabeza") };
+            }
+        }
+        if (jugadorLocal == null && ClienteRed.I.SoyDocente)
+        {
+            // Docente espectador: no está en la sala. Mira desde arriba de la entrada del Wizard.
+            espectador = CamaraLibre.Crear(generador.AparicionMundo("wizard") + Vector3.up * 2.5f, escena.transform);
+            jugadorLocal = espectador.gameObject;   // así Update interpola a los remotos
+        }
+        if (jugadorLocal == null)
+            Debug.LogWarning($"[Quimica] Mi id {ClienteRed.I.MiId} no está en la sala {sala.id}");
+        if (nivel.sala != null) generador.AbrirHasta(nivel.sala.sala, nivel.sala.completada_nivel);
+    }
+
+    void UpdateLaberinto()
+    {
+        foreach (var r in remotos.Values)
+        {
+            r.go.transform.position = Vector3.Lerp(r.go.transform.position, r.destino, 12 * Time.deltaTime);
+            r.go.transform.rotation = Quaternion.Slerp(r.go.transform.rotation, Quaternion.Euler(0, r.rotY, 0), 12 * Time.deltaTime);
+            if (r.cabeza != null) r.cabeza.localRotation = Quaternion.Euler(-r.pitch, 0, 0);
+        }
+        var camPP = jugadorLocal != null ? jugadorLocal.GetComponentInChildren<Camera>() : null;
+        if (camPP != null && escena != null)
+            foreach (var t in escena.GetComponentsInChildren<TextMesh>())
+                t.transform.rotation = camPP.transform.rotation;
     }
 
     void Quitar(string id)
@@ -258,6 +338,10 @@ public class GestorPartida : MonoBehaviour
     void Update()
     {
         if (jugadorLocal == null) return;
+
+        // En el laberinto, la primera persona se mueve sola (PrimeraPersona) y manda su
+        // propia posición con pitch; acá solo se interpolan los remotos.
+        if (laberinto) { UpdateLaberinto(); return; }
 
         // Movimiento local (WASD / flechas)
         var dir = new Vector3(Input.GetAxisRaw("Horizontal"), 0, Input.GetAxisRaw("Vertical"));
@@ -376,7 +460,7 @@ public class GestorPartida : MonoBehaviour
 
     public void Terminar()
     {
-        if (escena != null) Destroy(escena);
+        if (escena != null) Destroy(escena);   // destruye nivel, jugador local y remotos (son hijos)
         escena = null;
         salaDeLaEscena = null;
         raizMision = null;
@@ -384,5 +468,15 @@ public class GestorPartida : MonoBehaviour
         mision = null;
         remotos.Clear();
         esferas.Clear();
+
+        // Laberinto: restaurar la cámara de tercera persona y soltar las referencias
+        if (camaraVieja != null) { camaraVieja.SetActive(true); camaraVieja = null; }
+        generador = null;
+        primeraPersona = null;
+        espectador = null;
+        laberinto = false;
+        // Se sale de la partida (pausa → Salir de la sala, fin, cierre): el menú necesita el mouse
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
     }
 }

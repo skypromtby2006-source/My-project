@@ -38,7 +38,45 @@ Tomado de la explicación de la demo original (`_base/LEEME_demo_anterior.md`, e
 
 **Una sola conexión WebSocket para todo el panel**, compartida por las páginas. Cambiar de página no corta el flujo de logs. Se reconecta sola, con espera creciente, si el servidor se reinicia.
 
-**Los tests del panel corren sin BD** (`servidor/tests`, modo Plan B2) y no necesitan Docker. El camino con PostgreSQL se prueba con curl y con `probar_build.sh panel` contra el servidor real.
+**Los tests del panel corren sin BD** (`servidor/tests`, modo Plan B2) y no necesitan Docker. El camino con PostgreSQL se prueba con curl y con `probar_build.sh panel` contra el servidor real. *(Reemplazado en el Sprint 4: la batería corre contra memoria, SQLite y PostgreSQL; ver "Los tests corren contra los dos motores" más abajo.)*
 
 **Dependencias de tests aparte** (`servidor/requirements-dev.txt`): pytest y httpx no van en la imagen de Docker ni en el venv del Plan B2.
 
+## Sprint 4 — Dos formas de correr el servidor
+
+El juego necesita un servidor. Hay dos maneras de ofrecerlo, y conviven:
+
+**Servidor dedicado — Docker + PostgreSQL (recomendado para varios equipos).** Es lo que ya existe (`docker-compose.yml`). Una PC lo levanta y toda el aula se conecta a su IP. PostgreSQL guarda perfiles, progreso, eventos, logs y auditoría con durabilidad real y consultas concurrentes. Es la opción para una clase entera o un laboratorio fijo.
+
+**Servidor local — un solo ejecutable + SQLite (para una PC sin Docker).** Para el docente que solo quiere probarlo en su máquina, o para la prueba en Windows sin instalar Docker Desktop. Un `.exe` (PyInstaller, modo carpeta) trae el servidor del juego, la API y el panel. Si no hay `DATABASE_URL`, el servidor usa un archivo **SQLite** (`quimica.db`) junto al ejecutable, con **las mismas tablas y las mismas consultas** que PostgreSQL. Si SQLite fallara, cae a memoria (como antes). No reemplaza al servidor dedicado: SQLite es de un solo escritor, pensado para una PC, no para un aula conectándose a la vez.
+
+**Por qué una capa de datos (`servidor/repositorio.py`) y no dos caminos de SQL.** Antes cada función tenía su SQL de PostgreSQL embebido. Para soportar los dos motores sin duplicar queries ni "traducir" SQL con regex (frágil), todo el SQL vive ahora en `repositorio.py`. El SQL se escribe **portable** (SQLite ≥ 3.38 y PostgreSQL soportan `RETURNING`, `FILTER (WHERE …)` y `->>`), y las pocas diferencias **inevitables** se declaran en un **diccionario explícito por motor** (no en reemplazos de texto):
+
+| Diferencia | PostgreSQL | SQLite |
+|---|---|---|
+| Timestamp actual | `now()` | `strftime('%Y-%m-%d %H:%M:%f', 'now')` (texto UTC con milisegundos: con solo segundos, dos filas del mismo instante empatan al ordenar) |
+| Clave autoincremental | `SERIAL PRIMARY KEY` | `INTEGER PRIMARY KEY AUTOINCREMENT` |
+| JSON | `JSONB` | `TEXT` (con las funciones `json1`) |
+| Fecha con zona | `TIMESTAMPTZ` | `TEXT` ISO-8601 (UTC) |
+| Búsqueda sin distinguir mayúsculas | `ILIKE` | `LIKE` (SQLite no distingue mayúsculas en ASCII) |
+| Placeholder de parámetro | `$1, $2, …` | `?1, ?2, …` (numerado, para reusar un parámetro igual que en PostgreSQL) |
+| Fecha como parámetro | `datetime` | texto UTC con el mismo formato que el timestamp actual |
+
+**Versión de SQLite:** se verificó que `RETURNING`, `FILTER` y `->>` funcionan en el `sqlite3` de la stdlib — comprobado aquí en **Python 3.14.8 con SQLite 3.54.0**. En el Python 3.12 del entorno de Jona el `sqlite3` trae SQLite ≥ 3.45, de sobra por encima del mínimo requerido (**3.38**, por `->>`). Se usa el `sqlite3` de la biblioteca estándar (sin dependencias nuevas, mejor para empaquetar con PyInstaller); como `sqlite3` es sincrónico, cada consulta corre en un hilo con `asyncio.to_thread` sobre **una única conexión** (`check_same_thread=False`) y un `threading.Lock` tomado *dentro* del hilo la serializa: el event loop nunca espera el lock, solo el resultado. Una sola conexión y no un pool porque SQLite admite un escritor a la vez. `PRAGMA journal_mode=WAL` (lectores y escritor no se bloquean si otra herramienta abre el archivo) y `busy_timeout=5000` (esperar en vez de fallar con "database is locked").
+
+**El juego no se congela mientras la BD trabaja (medido).** `tests/test_concurrencia.py` carga 500 000 errores, lanza la consulta de las estadísticas (~0,8 s solo de SQL) y mientras tanto un jugador hace `ping` sin parar; se mide el **hueco entre pongs**. Resultado: SQLite ~115 ms de hueco máximo, PostgreSQL ~55 ms. *Contraprueba:* con el backend SQLite sin `to_thread` el test falla (un solo pong en 0,8 s). El test también destapó que **asyncpg decodifica las filas dentro del loop**: 500 000 filas de una vez lo frenaban ~0,4 s, así que los resultados grandes se leen con un cursor de a 5000 filas (`fetch_grande`). El JSON y pandas de las estadísticas también van en un hilo; aun así, armar el DataFrame es una llamada en C que retiene el GIL, y con 500 000 errores deja cortes de ~0,25 s. Con los datos de un aula (miles de eventos) es imperceptible; si algún día molestara, el paso siguiente es calcular en un proceso aparte.
+
+**Los tests corren contra los dos motores.** La misma batería (perfiles, progreso, panel, laberinto) se parametriza con la fixture `motor`: `memoria`, `sqlite` y `postgres`. Así "mismas consultas" no es una promesa sino algo probado. `scripts/probar_tests.sh` levanta un PostgreSQL **descartable** (`docker-compose.test.yml`: proyecto aparte, datos en tmpfs, puerto 55432 solo en 127.0.0.1) y lo apaga al terminar; los tests lo leen de `TEST_DATABASE_URL` y **no** de `DATABASE_URL`, porque vacían las tablas en cada caso y no deben poder tocar la BD real. Si falta la BD de prueba, los tests de postgres **fallan** en lugar de saltearse; para correr sin Docker hay que elegirlo explícitamente (`--motores=memoria,sqlite`). El reporte termina con "N passed, 0 skipped" por motor.
+
+
+## Sprint UI — Interfaz con UI Toolkit
+
+**Por qué UI Toolkit y no Canvas (uGUI).** El diseño de Claude Design está en HTML + CSS. UI Toolkit usa USS (casi CSS) y flexbox, así que cada pantalla se traduce casi línea por línea: las clases tienen el mismo nombre que en el export (`.btn`, `.card`, `.chip`, `.inp`, `.row`) y los colores son los tokens de `SPRINT_UI.md` §1, declarados una sola vez en `Assets/UI/Resources/UI/Estilos.uss`. Con uGUI habría que rearmar cada pantalla a mano con anclajes.
+
+**Cómo está armado.** Un UXML por pantalla (`Assets/UI/Resources/UI/`), un USS compartido y un `PanelSettings` con *Scale With Screen Size*, referencia 1280×720 y *match* 0,5. El `PanelSettings` es un `.asset`, así que lo genera `Editor/ConfigurarUI.cs` (regla 2: los `.asset` no se editan a mano); lo llaman `ConfigurarDemo` y cada build. `MenuLobby` crea el `UIDocument` por código, así la escena no cambia. La lógica se separó de la vista: `MenuLobby` guarda el estado y expone las acciones (que llaman a `ClienteRed`); cada pantalla (`Scripts/UI/Pantalla*.cs`) solo conecta sus botones con esas acciones. `PruebaAutomatica` llama a **las mismas** acciones, así la prueba del build recorre el mismo código que un clic. La red y el protocolo no cambian.
+
+**USS no tiene `gap`.** El diseño separa los elementos con `gap` de CSS, y USS no lo soporta. Las clases `g8`, `g14`, `g20`… las aplica `Ui.AplicarGaps` desde C#: le pone margen a cada hijo visible menos al primero (a la izquierda en una `.row`, arriba en una columna). Se vuelve a aplicar después de mostrar u ocultar elementos, para que un hijo oculto no deje un hueco.
+
+**Fuente: Manrope (SIL OFL).** Reemplaza a la fuente por defecto del tema, que no dibujaba "_" (bug B6 de la S2-3). Se verificó con `fc-query` que las tres variantes (400, 600 y 800) traen "_", tildes, "ñ", "¿¡", "→", "·" y también "₂", así que **no hizo falta Noto Sans de respaldo**. Los textos 3D del laberinto siguen con DejaVu Sans.
+
+**VR: paneles de UI Toolkit en el mundo 3D.** Unity 6.3 (`6000.3.27f1`) trae `PanelRenderMode.WorldSpace` (comprobado: `ConfigurarUI` lo deja en el log, `WorldSpace disponible: True`). O sea, los mismos UXML y USS pueden dibujarse en un panel que flota en la escena en vez de pegado a la pantalla: en la fase de VR alcanza con un segundo `PanelSettings` en modo *World Space* y un `UIDocument` colocado frente al jugador. **Lo que falta verificar en esa fase** es la interacción con los controles de VR (el rayo del XR Interaction Toolkit sobre un panel de UI Toolkit), porque esta demo no tiene paquete XR instalado y no se pudo probar. **Plan B** si esa interacción no funcionara: un `Canvas` de uGUI en *World Space* con el `TrackedDeviceGraphicRaycaster` del XR Interaction Toolkit solo para los menús de VR, manteniendo los mismos tokens de color. No se implementa ahora.

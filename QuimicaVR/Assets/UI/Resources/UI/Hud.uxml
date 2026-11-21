@@ -1,0 +1,59 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <!-- HUD en partida, pausa y diálogo de consola (UI-3, SPRINT_UI §3 "Pantallas que no están
+         en el diseño"): mismos tokens que el resto, tarjeta translúcida, máx. ~25% de la pantalla.
+         Todo ignora el mouse salvo los diálogos: con el cursor bloqueado no hay clics. -->
+    <Style src="Estilos.uss" />
+    <ui:VisualElement name="hud" class="hud" picking-mode="Ignore">
+        <ui:VisualElement name="panel-sala" class="hud-card g8" picking-mode="Ignore">
+            <ui:Label name="sala-titulo" class="w800 hud-titulo" picking-mode="Ignore" />
+            <ui:VisualElement class="row g8 hud-chips" picking-mode="Ignore">
+                <ui:Label name="chip-rol" class="chip host" picking-mode="Ignore" />
+                <ui:Label name="chip-concepto" class="chip" picking-mode="Ignore" />
+                <ui:Label name="chip-reto" class="chip warn" picking-mode="Ignore" />
+            </ui:VisualElement>
+            <ui:Label name="reaccion" class="hud-texto" picking-mode="Ignore" />
+            <ui:Label name="numeros" class="w800 hud-dato" picking-mode="Ignore" />
+            <ui:Label name="mensaje-sala" class="hud-mensaje-sala" picking-mode="Ignore" />
+        </ui:VisualElement>
+
+        <ui:Label name="mira" text="+" class="hud-mira" picking-mode="Ignore" />
+        <ui:VisualElement class="hud-fila hud-fila-pista" picking-mode="Ignore">
+            <ui:Label name="pista" class="chip lg" picking-mode="Ignore" />
+        </ui:VisualElement>
+        <ui:VisualElement class="hud-fila hud-fila-mensaje" picking-mode="Ignore">
+            <ui:Label name="mensaje" class="w800 hud-mensaje" picking-mode="Ignore" />
+        </ui:VisualElement>
+        <ui:VisualElement class="hud-fila hud-fila-aviso" picking-mode="Ignore">
+            <ui:Label name="aviso" class="chip warn lg" picking-mode="Ignore" />
+        </ui:VisualElement>
+        <ui:Label name="ayuda" class="chip hud-ayuda" picking-mode="Ignore" />
+
+        <!-- Consola de valor (greybox): se escribe el número y se envía -->
+        <ui:VisualElement name="editor" class="hud-modal">
+            <ui:VisualElement class="card hud-dialogo g16">
+                <ui:Label name="editor-titulo" class="w800 hud-titulo" />
+                <ui:TextField name="editor-valor" max-length="12" class="inp" />
+                <ui:VisualElement class="row g14">
+                    <ui:Button name="editor-enviar" text="Enviar" class="btn grow" />
+                    <ui:Button name="editor-cancelar" text="Cancelar" class="btn sec grow" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Pausa (Esc en partida) -->
+        <ui:VisualElement name="pausa" class="hud-modal">
+            <ui:VisualElement class="card hud-dialogo g20">
+                <ui:Label text="Pausa" class="w800 hud-titulo-lg" />
+                <ui:VisualElement class="g8">
+                    <ui:VisualElement class="row entre">
+                        <ui:Label text="Sensibilidad del mouse" class="lbl" />
+                        <ui:Label name="sensibilidad-valor" class="lbl" />
+                    </ui:VisualElement>
+                    <ui:Slider name="sensibilidad" low-value="0.5" high-value="6" class="hud-slider" />
+                </ui:VisualElement>
+                <ui:Button name="continuar" text="Continuar" class="btn" />
+                <ui:Button name="salir-sala" text="Salir de la sala" class="btn sec" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

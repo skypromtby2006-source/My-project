@@ -1,0 +1,325 @@
+/* Estilos compartidos de todas las pantallas (SPRINT_UI §1).
+   Las clases tienen el mismo nombre que en el HTML del diseño (.btn, .card, .chip,
+   .inp, .row) para poder comparar una pantalla con su export línea por línea.
+   USS no tiene "gap": las clases g8, g14, g16... las aplica Ui.AplicarGaps desde C#.
+   Los selectores van precedidos por .raiz para ganarle en especificidad al tema por
+   defecto de Unity (.unity-button, .unity-text-field...). */
+
+.raiz {
+    --fondo: #0e0a1f;
+    --tarjeta: #1a1433;
+    --tarjeta-borde: #3a2d6b;
+    --tarjeta-interna: #241b45;
+    --primario: #7c3aed;
+    --acento: #8b5cf6;
+    --marca: #a78bfa;
+    --secundario: #2a2050;
+    --secundario-borde: #4a3a8a;
+    --texto: #f3efff;
+    --texto-2: #b8aedd;
+    --separador: #2e2457;
+}
+
+/* ---------- Tipografía: Manrope 400 / 600 / 800 ----------
+   -unity-font-definition: initial porque la definición le gana a -unity-font, y el
+   tema por defecto trae la suya (sin "_" bien dibujado: bug B6 de la S2-3). */
+.raiz {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    -unity-font: url("project://database/Assets/Fonts/Manrope-Regular.ttf");
+    -unity-font-definition: initial;
+    color: var(--texto);
+    font-size: 18px;
+}
+.raiz .unity-text-element { -unity-font-definition: initial; }
+.raiz .w600 { -unity-font: url("project://database/Assets/Fonts/Manrope-SemiBold.ttf"); }
+.raiz .w800 { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); }
+
+/* Cada pantalla ocupa todo el panel; MenuLobby muestra una sola a la vez */
+.pantalla-cont { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+.pantalla {
+    flex-grow: 1;
+    background-color: var(--fondo);
+    padding: 48px 64px;
+}
+
+/* ---------- Layout ---------- */
+.row { flex-direction: row; align-items: center; }
+.col { flex-direction: column; }
+.grow { flex-grow: 1; flex-shrink: 1; }
+.estirar { align-items: stretch; }
+.entre { justify-content: space-between; }
+
+/* ---------- Texto ---------- */
+.marca {
+    -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf");
+    font-size: 22px;
+    letter-spacing: 1.3px;
+    color: var(--marca);
+}
+.h1 { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); font-size: 44px; margin: 0; padding: 0; }
+.h1-sm { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); font-size: 40px; margin: 0; padding: 0; }
+.h1-xl { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); font-size: 60px; margin: 0 0 16px 0; padding: 0; white-space: normal; }
+.h2 { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); font-size: 26px; margin: 0; padding: 0; }
+.h2-lg { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); font-size: 32px; margin: 0; padding: 0; }
+.lbl {
+    -unity-font: url("project://database/Assets/Fonts/Manrope-SemiBold.ttf");
+    font-size: 15px;
+    color: var(--texto-2);
+    margin: 0 0 6px 0;
+    padding: 0;
+}
+.parrafo { font-size: 18px; color: var(--texto-2); white-space: normal; margin: 0; padding: 0; }
+.parrafo-lg { font-size: 20px; color: var(--texto-2); white-space: normal; margin: 0; padding: 0; max-width: 460px; }
+.dato { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); font-size: 19px; margin: 0; padding: 0; }
+.raiz Label { margin: 0; padding: 0; }
+
+/* ---------- Tarjetas ---------- */
+.card {
+    background-color: var(--tarjeta);
+    border-width: 1px;
+    border-color: var(--tarjeta-borde);
+    border-radius: 16px;
+    padding: 28px;
+}
+.card-destacada { border-width: 2px; border-color: var(--acento); }
+.card-interna { background-color: var(--tarjeta-interna); border-radius: 12px; padding: 16px; }
+
+/* ---------- Botones ---------- */
+.raiz .btn {
+    -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf");
+    height: 52px;
+    min-height: 52px;
+    padding: 0 24px;
+    margin: 0;
+    font-size: 18px;
+    color: #ffffff;
+    background-color: var(--primario);
+    border-width: 0;
+    border-radius: 12px;
+    -unity-text-align: middle-center;
+}
+.raiz .btn:hover { background-color: var(--acento); }
+.raiz .btn:active { background-color: #6d28d9; }
+.raiz .btn.sec {
+    background-color: var(--secundario);
+    color: var(--texto);
+    border-width: 1px;
+    border-color: var(--secundario-borde);
+}
+.raiz .btn.sec:hover { background-color: #352a63; }
+.raiz .btn.sec:active { background-color: #231b45; }
+.raiz .btn.sm { height: 44px; min-height: 44px; font-size: 16px; padding: 0 18px; }
+.raiz .btn:disabled { opacity: 0.45; }
+.raiz .btn.sec:disabled:hover { background-color: var(--secundario); }
+.raiz .btn:disabled:hover { background-color: var(--primario); }
+
+/* ---------- Campos de texto ---------- */
+.raiz .inp { margin: 0; padding: 0; }
+.raiz .inp > .unity-base-text-field__input {
+    height: 52px;
+    min-height: 52px;
+    margin: 0;
+    padding: 0 16px;
+    font-size: 18px;
+    color: var(--texto);
+    background-color: var(--fondo);
+    border-width: 1px;
+    border-color: var(--secundario-borde);
+    border-radius: 12px;
+    -unity-text-align: middle-left;
+}
+.raiz .inp:focus > .unity-base-text-field__input,
+.raiz .inp > .unity-base-text-field__input:focus { border-color: var(--acento); }
+.raiz .inp .unity-text-element { color: var(--texto); }
+/* Valor de solo lectura (usuario en Mi perfil): misma caja que un campo, sin edición */
+.inp-fijo {
+    height: 52px;
+    padding: 0 16px;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: var(--separador);
+    background-color: var(--fondo);
+    color: var(--texto-2);
+    -unity-text-align: middle-left;
+    font-size: 18px;
+}
+
+/* ---------- Chips ---------- */
+.chip {
+    -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf");
+    align-self: flex-start;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 14px;
+    background-color: var(--secundario);
+    color: #d8ccff;
+    white-space: normal;
+}
+.raiz .chip.ok { background-color: #123b36; color: #5eead4; }
+.raiz .chip.warn { background-color: #3a2d12; color: #fbbf24; }
+.raiz .chip.host { background-color: #3b2a7a; color: #d8ccff; }
+.raiz .chip.lg { font-size: 16px; }
+
+/* Chip del perfil (nombre + punto del color elegido) */
+.chip-perfil { flex-direction: row; align-items: center; padding: 5px 14px 5px 8px; border-radius: 999px; background-color: var(--secundario); }
+.punto { width: 16px; height: 16px; border-radius: 8px; margin-right: 8px; border-width: 1px; border-color: rgba(255, 255, 255, 0.35); }
+.chip-perfil > Label { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); font-size: 14px; color: #d8ccff; }
+
+/* ---------- Selector de 8 colores ---------- */
+.color {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border-width: 2px;
+    border-color: rgba(0, 0, 0, 0);
+}
+.color:hover { border-color: var(--texto-2); }
+.raiz .color-elegido { border-width: 3px; border-color: #ffffff; }
+
+/* ---------- Avatar (inicial en el color del perfil) ---------- */
+.avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 24px;
+    align-items: center;
+    justify-content: center;
+}
+.avatar > Label { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); font-size: 20px; }
+
+/* ---------- Listas ---------- */
+.fila { flex-direction: row; align-items: center; padding: 12px 0; border-top-width: 1px; border-color: var(--separador); }
+.fila-jugador { flex-direction: row; align-items: center; padding: 10px 0; }
+
+/* ---------- Login ---------- */
+.login { flex-direction: row; padding: 0; }
+.login-izq { flex-grow: 1; padding: 72px; justify-content: space-between; }
+.login-der { width: 560px; padding: 56px 56px 56px 0; justify-content: center; }
+.login-card { padding: 32px; }
+
+/* ---------- Banner de avisos globales (arriba, estilo chip de aviso) ---------- */
+.banner {
+    position: absolute;
+    top: 16px;
+    left: 0;
+    right: 0;
+    align-items: center;
+}
+.banner > Label {
+    -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf");
+    max-width: 1000px;
+    padding: 10px 22px;
+    border-radius: 999px;
+    font-size: 18px;
+    background-color: #3a2d12;
+    color: #fbbf24;
+    border-width: 1px;
+    border-color: #6b5320;
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+/* ---------- Textos y datos extra (UI-2) ---------- */
+.h2-sm { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); font-size: 24px; margin: 0 0 4px 0; padding: 0; }
+.dato-lg { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); font-size: 30px; margin: 0; padding: 0; }
+.vacia { margin-top: 12px; }
+.raiz .lbl.sin-margen { margin: 0; }
+
+/* ---------- Salas ---------- */
+.col-crear { width: 420px; }
+.lista { flex-grow: 1; flex-shrink: 1; }
+/* La barra del ScrollView del tema por defecto es gris claro: se lleva a los tokens */
+.raiz .unity-scroller--vertical { width: 8px; border-width: 0; background-color: rgba(0, 0, 0, 0); }
+.raiz .unity-scroller--vertical .unity-base-slider__tracker { background-color: rgba(0, 0, 0, 0); border-width: 0; }
+.raiz .unity-scroller--vertical .unity-base-slider__dragger { background-color: var(--secundario-borde); border-width: 0; border-radius: 4px; width: 6px; left: 1px; }
+.raiz .unity-scroller--vertical .unity-repeat-button { display: none; }
+.nombre-fila { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); font-size: 19px; flex-grow: 1; flex-shrink: 1; }
+.cupo { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); font-size: 18px; width: 56px; -unity-text-align: middle-center; }
+.raiz .fila .chip { align-self: center; }
+.raiz .btn.paso { width: 52px; padding: 0; font-size: 22px; }
+.valor-paso { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); -unity-text-align: middle-center; color: var(--texto); }
+
+/* ---------- Lobby ---------- */
+.codigo-sala {
+    -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf");
+    font-size: 36px;
+    letter-spacing: 7px;
+    background-color: var(--tarjeta);
+    border-width: 1px;
+    border-color: var(--tarjeta-borde);
+    border-radius: 12px;
+    padding: 6px 20px;
+}
+.card-lado { padding: 24px; }
+.nombre-jugador { -unity-font: url("project://database/Assets/Fonts/Manrope-ExtraBold.ttf"); font-size: 20px; flex-grow: 1; flex-shrink: 1; }
+.raiz .fila-jugador .chip { align-self: center; }
+
+/* ---------- Mi perfil ---------- */
+.col-perfil { width: 460px; }
+.fila-historial { flex-direction: row; align-items: center; padding: 10px 0; border-top-width: 1px; border-color: var(--separador); }
+.fila-historial > Label { font-size: 17px; color: var(--texto); }
+.fila-historial > .fecha { flex-grow: 1; color: var(--texto-2); }
+.fila-historial > .col-dato { width: 130px; -unity-text-align: middle-right; }
+.raiz .inp .unity-base-text-field__input--placeholder .unity-text-element,
+.raiz .inp > .unity-base-text-field__input--placeholder { color: #6f64a0; }
+
+/* ---------- HUD en partida, pausa y consola (UI-3) ----------
+   Tarjeta translúcida con los mismos tokens; ocupa como máximo ~25% de la pantalla. */
+.hud { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+.hud-card {
+    position: absolute;
+    left: 20px;
+    top: 20px;
+    max-width: 400px;
+    padding: 14px 18px;
+    background-color: rgba(26, 20, 51, 0.82);
+    border-width: 1px;
+    border-color: rgba(74, 58, 138, 0.9);
+    border-radius: 16px;
+}
+.hud-titulo { font-size: 20px; margin: 0; padding: 0; white-space: normal; }
+.hud-titulo-lg { font-size: 30px; margin: 0; padding: 0; }
+.hud-chips { flex-wrap: wrap; }
+.hud-texto { font-size: 16px; color: var(--texto-2); white-space: normal; margin: 0; padding: 0; }
+.hud-dato { font-size: 17px; white-space: normal; margin: 0; padding: 0; }
+.hud-mensaje-sala { font-size: 16px; color: #5eead4; white-space: normal; margin: 0; padding: 0; }
+.hud-mira {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 24px;
+    height: 24px;
+    margin-left: -12px;
+    margin-top: -12px;
+    padding: 0;
+    font-size: 24px;
+    -unity-text-align: middle-center;
+    color: rgba(243, 239, 255, 0.9);
+}
+/* Filas centradas a lo ancho: el chip de adentro queda en el medio */
+.hud-fila { position: absolute; left: 0; right: 0; align-items: center; }
+.hud-fila > .chip { align-self: center; }
+.hud-fila-pista { top: 53%; }
+.hud-fila-mensaje { top: 20%; }
+.hud-fila-aviso { bottom: 36px; }
+.hud-mensaje {
+    font-size: 28px;
+    max-width: 900px;
+    padding: 12px 26px;
+    border-radius: 16px;
+    background-color: rgba(26, 20, 51, 0.82);
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+.hud-ayuda { position: absolute; left: 20px; bottom: 20px; }
+.hud-modal {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(14, 10, 31, 0.6);
+}
+.hud-dialogo { width: 420px; }
+.raiz .hud-slider { margin: 0; }
+.raiz .hud-slider .unity-base-slider__tracker { background-color: var(--secundario); border-color: var(--secundario-borde); border-radius: 4px; }
+.raiz .hud-slider .unity-base-slider__dragger { background-color: var(--acento); border-color: var(--marca); border-radius: 8px; }
