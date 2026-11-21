@@ -192,8 +192,13 @@ EOF
 probar_demo_exe() {
   local exe="$1" dir; dir="$(dirname "$exe")"
   local env_exe=(env -u DATABASE_URL -u ADMIN_USER -u ADMIN_PASSWORD -u JWT_SECRET -u SQLITE_RUTA)
+  # La contraseña se compara en demo_credenciales.txt y no en la salida: con la salida
+  # redirigida, Windows usa cp1252 y "contraseña" sale como "contrase?a"
+  local c1 c2
   (cd "$TMP" && "${env_exe[@]}" "$exe" --sembrar-demo > "$TMP/demo1.log" 2>&1) || { cat "$TMP/demo1.log"; return 1; }
+  c1="$(grep '^DOCENTE_PASSWORD=' "$dir/demo_credenciales.txt" | tr -d '\r')"
   (cd "$TMP" && "${env_exe[@]}" "$exe" --sembrar-demo > "$TMP/demo2.log" 2>&1) || { cat "$TMP/demo2.log"; return 1; }
+  c2="$(grep '^DOCENTE_PASSWORD=' "$dir/demo_credenciales.txt" | tr -d '\r')"
   [ -f "$dir/demo_credenciales.txt" ] || { echo "ERROR: --sembrar-demo no dejó demo_credenciales.txt"; return 1; }
   "$PY" - "$dir" <<'EOF2'
 import pathlib, sqlite3, sys
@@ -211,8 +216,8 @@ cuenta = (n("SELECT count(*) FROM docentes WHERE usuario='docente_demo'"),
 assert cuenta == (1, 1, 6, 4), f"sembrar dos veces dejó {cuenta} (esperado 1 docente, 1 clase, 6 intentos, 4 estudiantes)"
 print("  --sembrar-demo dos veces: 1 docente, 1 clase, 6 intentos, 4 estudiantes (sin duplicar) ✔")
 EOF2
-  local c1 c2; c1="$(grep -o 'contraseña: [^ ]*' "$TMP/demo1.log" | tr -d '\r')"; c2="$(grep -o 'contraseña: [^ ]*' "$TMP/demo2.log" | tr -d '\r')"
-  [ -n "$c1" ] && [ "$c1" = "$c2" ] || { echo "ERROR: la contraseña del docente cambió al re-sembrar ($c1 / $c2)"; return 1; }
+  [ -n "$c1" ] && [ "$c1" = "$c2" ] || { echo "ERROR: la contraseña del docente cambió al re-sembrar"; return 1; }
+  echo "  --sembrar-demo dos veces: misma contraseña del docente ✔"
   (cd "$TMP" && "${env_exe[@]}" "$exe" --limpiar-demo > "$TMP/demo3.log" 2>&1) || { cat "$TMP/demo3.log"; return 1; }
   "$PY" - "$dir/quimica.db" <<'EOF2'
 import sqlite3, sys
